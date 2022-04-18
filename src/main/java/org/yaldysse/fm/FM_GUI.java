@@ -23,9 +23,11 @@ import javafx.util.Callback;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.*;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -41,6 +43,10 @@ public class FM_GUI extends Application
     private TreeTableView<FileData> content_TreeTableView;
     private CustomTreeTableColumn<FileData, String> nameColumn;
     private CustomTreeTableColumn<FileData, Long> sizeColumn;
+    private CustomTreeTableColumn<FileData, String> ownerColumn;
+    private CustomTreeTableColumn<FileData, String> lastModifiedTimeColumn;
+    private CustomTreeTableColumn<FileData, String> creationTimeColumn;
+    private CustomTreeTableColumn<FileData, String> typeColumn;
     private TreeTableCell<FileData, String> treeTableCell;
     private TreeItem<FileData> rootItem;
     private ContextMenu contextMenuForColums;
@@ -212,20 +218,52 @@ public class FM_GUI extends Application
         nameColumn = new CustomTreeTableColumn<>("Name");
         nameColumn.setMinWidth(preferredWidth * 0.1D);
         nameColumn.setSortable(false);
+
         sizeColumn = new CustomTreeTableColumn<>("Size");
         sizeColumn.setMinWidth(preferredWidth * 0.05D);
         sizeColumn.setSortable(false);
 
+        ownerColumn = new CustomTreeTableColumn<>("Owner");
+        ownerColumn.setMinWidth(preferredWidth * 0.1D);
+        ownerColumn.setSortable(false);
+        ownerColumn.setVisible(false);
+
+        lastModifiedTimeColumn = new CustomTreeTableColumn<>("Last modified time");
+        lastModifiedTimeColumn.setMinWidth(preferredWidth * 0.1D);
+        lastModifiedTimeColumn.setSortable(false);
+        lastModifiedTimeColumn.setVisible(false);
+
+        creationTimeColumn = new CustomTreeTableColumn<>("Creation time");
+        creationTimeColumn.setMinWidth(preferredWidth * 0.1D);
+        creationTimeColumn.setSortable(false);
+        creationTimeColumn.setVisible(false);
+
+        typeColumn = new CustomTreeTableColumn<>("Type");
+        typeColumn.setMinWidth(preferredWidth * 0.1D);
+        typeColumn.setSortable(false);
+//        ownerColumn.visibleProperty().addListener((event) ->
+//        {
+//           ownerColumn
+//        });
 
         nameColumn.setCellValueFactory((TreeTableColumn.CellDataFeatures<FileData, String> param) ->
                 new ReadOnlyStringWrapper(param.getValue().getValue().getName()));
         sizeColumn.setCellValueFactory((TreeTableColumn.CellDataFeatures<FileData, Long> param) ->
                 new ReadOnlyObjectWrapper<>(param.getValue().getValue().getSize()));
+        ownerColumn.setCellValueFactory((TreeTableColumn.CellDataFeatures<FileData, String> param) ->
+                new ReadOnlyStringWrapper(param.getValue().getValue().getOwner()));
+        lastModifiedTimeColumn.setCellValueFactory((TreeTableColumn.CellDataFeatures<FileData, String> param) ->
+                new ReadOnlyStringWrapper(param.getValue().getValue().getLastModifiedTime(true)));
+        creationTimeColumn.setCellValueFactory((TreeTableColumn.CellDataFeatures<FileData, String> param) ->
+                new ReadOnlyStringWrapper(param.getValue().getValue().getCreationTime(true)));
+        typeColumn.setCellValueFactory((TreeTableColumn.CellDataFeatures<FileData, String> param) ->
+                new ReadOnlyStringWrapper(param.getValue().getValue().getType()));
 
         rootItem = new TreeItem<>(new FileData("root", 4096L));
 
         content_TreeTableView = new TreeTableView<>();
-        content_TreeTableView.getColumns().addAll(nameColumn, sizeColumn);
+        content_TreeTableView.getColumns().addAll(nameColumn, typeColumn, sizeColumn, ownerColumn,
+                creationTimeColumn,lastModifiedTimeColumn);
         content_TreeTableView.setRoot(rootItem);
         content_TreeTableView.setShowRoot(false);
         content_TreeTableView.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
@@ -236,6 +274,7 @@ public class FM_GUI extends Application
             contentKeyPressed_Action(event);
         });
         content_TreeTableView.getSortOrder().add(nameColumn);
+        content_TreeTableView.setTableMenuButtonVisible(true);
 
         EventHandler<MouseEvent> mouseClickEvent = new EventHandler<>()
         {
@@ -272,6 +311,11 @@ public class FM_GUI extends Application
             }
         });
 
+        content_TreeTableView.setColumnResizePolicy(TreeTableView.CONSTRAINED_RESIZE_POLICY);
+        nameColumn.setMaxWidth(1f * Integer.MAX_VALUE * 70); // 50% width
+        sizeColumn.setMaxWidth(1f * Integer.MAX_VALUE * 30); // 30% width
+        //ageCol.setMaxWidth( 1f * Integer.MAX_VALUE * 20 ); // 20% width
+
         content_VBox = new VBox(rem * 0.45D);
         content_VBox.setPadding(new Insets(rem * 0.15D, rem * 0.7D, rem * 0.7D, rem * 0.7D));
         content_VBox.getChildren().addAll(currentPath_TextField, content_TreeTableView);
@@ -305,6 +349,10 @@ public class FM_GUI extends Application
 
         nameColumn.setContextMenu(contextMenuForColums);
         sizeColumn.setContextMenu(contextMenuForColums);
+        ownerColumn.setContextMenu(contextMenuForColums);
+        creationTimeColumn.setContextMenu(contextMenuForColums);
+        lastModifiedTimeColumn.setContextMenu(contextMenuForColums);
+        typeColumn.setContextMenu(contextMenuForColums);
     }
 
     private void contextMenuForColumns_Action(ActionEvent event)
@@ -379,14 +427,31 @@ public class FM_GUI extends Application
         try (Stream<Path> filesStream = Files.list(destinationPath))
         {
             Iterator<Path> iterator = filesStream.iterator();
+            FileData temporaryFileData = null;
             while (iterator.hasNext())
             {
                 Path temporaryPath = iterator.next();
 
                 try
                 {
-                    rootItem.getChildren().add(new TreeItem<>(new FileData(temporaryPath.getFileName().toString(),
-                            Files.size(temporaryPath))));
+                    temporaryFileData = new FileData(temporaryPath.getFileName().toString(), Files.size(temporaryPath));
+                    if (ownerColumn.isVisible())
+                    {
+                        temporaryFileData.setOwner(Files.getOwner(temporaryPath).getName());
+                    }
+                    if (lastModifiedTimeColumn.isVisible())
+                    {
+                        temporaryFileData.setLastModifiedTime(Files.getLastModifiedTime(temporaryPath));
+                    }
+                    if(creationTimeColumn.isVisible())
+                    {
+                        temporaryFileData.setCreationTime(Files.readAttributes(temporaryPath,BasicFileAttributes.class ).creationTime());
+                    }
+                    temporaryFileData.setDirectory(Files.isDirectory(temporaryPath ));
+                    temporaryFileData.setFile(Files.isRegularFile(temporaryPath));
+                    temporaryFileData.setSymbolicLink(Files.isSymbolicLink(temporaryPath ));
+
+                    rootItem.getChildren().add(new TreeItem<>(temporaryFileData));
                 }
                 catch (IOException ioException)
                 {
