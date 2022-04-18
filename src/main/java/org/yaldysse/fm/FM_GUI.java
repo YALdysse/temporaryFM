@@ -3,6 +3,7 @@ package org.yaldysse.fm;
 import javafx.application.Application;
 import javafx.beans.property.ReadOnlyObjectWrapper;
 import javafx.beans.property.ReadOnlyStringWrapper;
+import javafx.event.ActionEvent;
 import javafx.event.EventHandler;
 import javafx.geometry.Insets;
 import javafx.scene.Scene;
@@ -38,8 +39,8 @@ public class FM_GUI extends Application
     private BorderPane menu_BorderPane;
     private TextField currentPath_TextField;
     private TreeTableView<FileData> content_TreeTableView;
-    private TreeTableColumn<FileData, String> nameColumn;
-    private TreeTableColumn<FileData, Long> sizeColumn;
+    private CustomTreeTableColumn<FileData, String> nameColumn;
+    private CustomTreeTableColumn<FileData, Long> sizeColumn;
     private TreeTableCell<FileData, String> treeTableCell;
     private TreeItem<FileData> rootItem;
     private ContextMenu contextMenuForColums;
@@ -52,12 +53,6 @@ public class FM_GUI extends Application
     public final String FIlE_SYSTEMS_PATH = "file systems:///";
     private Path currentPath;
     private TreeTableColumn.SortType sortType;
-    private String maxLengthName;
-    private String maxLengthSize_str;
-    private boolean fitNameColumnToData;
-    private boolean fitSizeColumnToData;
-    private boolean isFitNameColumnActive;
-    private boolean isFitSizeColumnActive;
 
     private MenuBar menu_Bar;
     private Menu file_Menu;
@@ -75,6 +70,9 @@ public class FM_GUI extends Application
     private MenuItem goToHomeDirectory_MenuItem;
     private MenuItem goToUserDirectory_MenuItem;
     private MenuItem exit_MenuItem;
+
+    private CheckMenuItem autoSizeColumn_MenuItem;
+
 
     @Override
     public void start(Stage primaryStage) throws Exception
@@ -211,11 +209,11 @@ public class FM_GUI extends Application
 
     private void initializeGeneral()
     {
-        nameColumn = new TreeTableColumn<>("Name");
+        nameColumn = new CustomTreeTableColumn<>("Name");
         nameColumn.setMinWidth(preferredWidth * 0.1D);
         nameColumn.setSortable(false);
-        sizeColumn = new TreeTableColumn<>("Size");
-        sizeColumn.setMinWidth(preferredWidth * 0.1D);
+        sizeColumn = new CustomTreeTableColumn<>("Size");
+        sizeColumn.setMinWidth(preferredWidth * 0.05D);
         sizeColumn.setSortable(false);
 
 
@@ -231,14 +229,6 @@ public class FM_GUI extends Application
         content_TreeTableView.setRoot(rootItem);
         content_TreeTableView.setShowRoot(false);
         content_TreeTableView.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
-//        content_TreeTableView.getSelectionModel().selectedItemProperty().addListener((event, val, val2) ->
-//        {
-//            if (val2 != null)
-//            {
-//                System.out.println("pidar");
-//                System.out.println(val2.getValue().getName());
-//            }
-//        });
 
         //Сомнительный подход
         content_TreeTableView.setOnKeyPressed(event ->
@@ -267,6 +257,7 @@ public class FM_GUI extends Application
                 return temporaryCell;
             }
         });
+        //nameColumn.setAutoFitColumnWidthToData(true);
 
         currentPath_TextField = new TextField();
         currentPath_TextField.setOnKeyPressed(event ->
@@ -281,8 +272,6 @@ public class FM_GUI extends Application
             }
         });
 
-        fitNameColumnToData = false;
-
         content_VBox = new VBox(rem * 0.45D);
         content_VBox.setPadding(new Insets(rem * 0.15D, rem * 0.7D, rem * 0.7D, rem * 0.7D));
         content_VBox.getChildren().addAll(currentPath_TextField, content_TreeTableView);
@@ -294,58 +283,47 @@ public class FM_GUI extends Application
         contextMenuForColums = new ContextMenu();
         contextMenuForColums.setOnShowing(event ->
         {
-            System.out.println("Отображается.");
+            System.out.println("Отображается Контекстное меню.");
             TableColumnHeader tableColumnHeader = (TableColumnHeader) contextMenuForColums.getOwnerNode();
-            TreeTableColumn<FileData, String> temporaryColumn = (TreeTableColumn<FileData, String>) tableColumnHeader.getTableColumn();
-            System.out.println(temporaryColumn.getText());
-            ContextMenu sourceMenu = (ContextMenu) event.getSource();
-            CheckMenuItem sourceMenuItem = (CheckMenuItem) sourceMenu.getItems().get(0);
+            TableColumnBase tableColumnBase = tableColumnHeader.getTableColumn();
+            CustomTreeTableColumn temporaryColumn = (CustomTreeTableColumn) tableColumnBase;
+            System.out.println(temporaryColumn.toString());
 
-            if(temporaryColumn.equals(nameColumn))
+            if (temporaryColumn.isAutoFitSizeColumn())
             {
-                sourceMenuItem.setSelected(isFitNameColumnActive);
+                autoSizeColumn_MenuItem.setSelected(true);
             }
-            else if(temporaryColumn.equals(sizeColumn))
+            else
             {
-                sourceMenuItem.setSelected(isFitSizeColumnActive);
+                autoSizeColumn_MenuItem.setSelected(false);
             }
         });
 
-        CheckMenuItem autoSizeColumn_MenuItem = new CheckMenuItem("Auto size");
-        autoSizeColumn_MenuItem.setOnAction(event ->
-        {
-            TableColumnHeader tableColumnHeader = (TableColumnHeader) contextMenuForColums.getOwnerNode();
-            TreeTableColumn<FileData, String> temporaryColumn = (TreeTableColumn<FileData, String>) tableColumnHeader.getTableColumn();
-            System.out.println(temporaryColumn.getText());
-            CheckMenuItem source = (CheckMenuItem) event.getSource();
-
-            //Устанавливает равенство колонок
-            //content_TreeTableView.setColumnResizePolicy(TreeTableView.CONSTRAINED_RESIZE_POLICY);
-            String currentMaxLengthString = null;
-
-            if (temporaryColumn.equals(nameColumn))
-            {
-                isFitNameColumnActive=autoSizeColumn_MenuItem.isSelected();
-                fitNameColumnToData = source.isSelected();
-                currentMaxLengthString = maxLengthName;
-            }
-            else if (temporaryColumn.equals(sizeColumn))
-            {
-                isFitSizeColumnActive=autoSizeColumn_MenuItem.isSelected();
-                fitSizeColumnToData = source.isSelected();
-                currentMaxLengthString = maxLengthSize_str;
-            }
-
-            if (source.isSelected())
-            {
-                fitColumnToData(temporaryColumn, currentMaxLengthString);
-            }
-        });
+        autoSizeColumn_MenuItem = new CheckMenuItem("Auto size");
+        autoSizeColumn_MenuItem.setOnAction(this::contextMenuForColumns_Action);
         contextMenuForColums.getItems().addAll(autoSizeColumn_MenuItem);
 
         nameColumn.setContextMenu(contextMenuForColums);
         sizeColumn.setContextMenu(contextMenuForColums);
+    }
 
+    private void contextMenuForColumns_Action(ActionEvent event)
+    {
+        TableColumnHeader tableColumnHeader = (TableColumnHeader) contextMenuForColums.getOwnerNode();
+        CustomTreeTableColumn<FileData, String> temporaryColumn = (CustomTreeTableColumn<FileData, String>) tableColumnHeader.getTableColumn();
+        System.out.println(temporaryColumn.getText());
+        CheckMenuItem source = (CheckMenuItem) event.getSource();
+
+        //Устанавливает равенство колонок
+        //content_TreeTableView.setColumnResizePolicy(TreeTableView.CONSTRAINED_RESIZE_POLICY);
+        if (source.isSelected())
+        {
+            temporaryColumn.setAutoFitColumnWidthToData(true);
+        }
+        else
+        {
+            temporaryColumn.setAutoFitColumnWidthToData(false);
+        }
     }
 
     /**
@@ -397,8 +375,6 @@ public class FM_GUI extends Application
         long startTime = System.currentTimeMillis();
         System.out.println("updatePath: " + destinationPath);
         rootItem.getChildren().clear();
-        int maxNameLength = 1;
-        int maxSizeLength = 1;
 
         try (Stream<Path> filesStream = Files.list(destinationPath))
         {
@@ -406,21 +382,6 @@ public class FM_GUI extends Application
             while (iterator.hasNext())
             {
                 Path temporaryPath = iterator.next();
-
-                int currentNameLength = temporaryPath.getFileName().toString().length();
-                String currentSize_str = String.valueOf(Files.size(temporaryPath));
-                int currentSizeLength = currentSize_str.length();
-
-                if (currentNameLength > maxNameLength)
-                {
-                    maxNameLength = currentNameLength;
-                    maxLengthName = temporaryPath.getFileName().toString();
-                }
-                if (currentSizeLength > maxSizeLength)
-                {
-                    maxSizeLength = currentSizeLength;
-                    maxLengthSize_str = currentSize_str;
-                }
 
                 try
                 {
@@ -442,30 +403,7 @@ public class FM_GUI extends Application
         }
 
         requestSort();
-
-        if (fitNameColumnToData)
-        {
-            fitColumnToData(nameColumn, maxLengthName);
-        }
-        if(fitSizeColumnToData)
-        {
-            fitColumnToData(sizeColumn,maxLengthSize_str);
-        }
-
         return true;
-    }
-
-    private void fitColumnToData(TreeTableColumn<FileData, ?> sourceColumn,
-                                 final String currentMaxLengthName)
-    {
-        Font cellFont = Font.font(16.0D);
-        System.out.println("Длинное слово: " + currentMaxLengthName);
-        Text temporaryText = new Text(currentMaxLengthName);
-        System.out.println("Без шрифта: " + temporaryText.getBoundsInParent().getWidth());
-        temporaryText.setFont(cellFont);
-        System.out.println("Со шрифтом: " + temporaryText.getBoundsInParent().getWidth());
-        double temporaryWidth = temporaryText.getBoundsInParent().getWidth();
-        sourceColumn.setPrefWidth(temporaryWidth);
     }
 
     /**
@@ -513,6 +451,11 @@ public class FM_GUI extends Application
                 goToPath(Paths.get(content_TreeTableView.getSelectionModel().getSelectedItem().getValue().getName()));
             }
         }
+//        else if(event.getCode() == KeyCode.HOME)
+//        {
+//            System.out.println("Запрос на авторазмер....");
+//            nameColumn.setAutoFitColumnWidthToData(false);
+//        }
     }
 
     /**
