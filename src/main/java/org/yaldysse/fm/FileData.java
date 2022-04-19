@@ -169,7 +169,7 @@ public class FileData
     {
         if(hasDirectory)
         {
-            return "Directory";
+            return "ZDirectory";
         }
         else if(hasFile)
         {

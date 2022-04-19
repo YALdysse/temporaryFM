@@ -1,6 +1,7 @@
 package org.yaldysse.fm;
 
 import javafx.application.Application;
+import javafx.beans.property.Property;
 import javafx.beans.property.ReadOnlyObjectWrapper;
 import javafx.beans.property.ReadOnlyStringWrapper;
 import javafx.event.ActionEvent;
@@ -72,6 +73,7 @@ public class FM_GUI extends Application
     private RadioMenuItem sortByOwner_MenuItem;
     private RadioMenuItem sortByCreationTime_MenuItem;
     private RadioMenuItem sortByLastModifiedTime_MenuItem;
+    private CheckMenuItem directoriesFirst_MenuItem;
 
     private ToggleGroup sortBy_ToggleGroup;
     private RadioMenuItem descendingSortType_MenuItem;
@@ -195,6 +197,7 @@ public class FM_GUI extends Application
             requestSort(typeColumn);
         });
         sortByType_MenuItem.setToggleGroup(sortBy_ToggleGroup);
+        sortByType_MenuItem.setDisable(true);
 
         sortByOwner_MenuItem = new RadioMenuItem("by Owner");
         sortByOwner_MenuItem.setOnAction(event ->
@@ -240,14 +243,45 @@ public class FM_GUI extends Application
             requestSort(lastActiveSortColumn);
         });
 
-        sortType = TreeTableColumn.SortType.ASCENDING;
+        directoriesFirst_MenuItem = new CheckMenuItem("Directories first");
+        directoriesFirst_MenuItem.setSelected(true);
+        directoriesFirst_MenuItem.setOnAction(event ->
+        {
+            requestSort(lastActiveSortColumn);
+        });
+        directoriesFirst_MenuItem.selectedProperty().addListener(event ->
+        {
+            if (directoriesFirst_MenuItem.isSelected())
+            {
+                sortByType_MenuItem.setDisable(true);
+                sortByType_MenuItem.setSelected(false);
+            }
+            else
+            {
+                sortByType_MenuItem.setDisable(false);
+                sortByType_MenuItem.setSelected(false);
+            }
+        });
+
+        sortByType_MenuItem.selectedProperty().addListener(event ->
+        {
+            if (sortByType_MenuItem.isSelected())
+            {
+                directoriesFirst_MenuItem.setDisable(true);
+                directoriesFirst_MenuItem.setSelected(false);
+            }
+            else
+            {
+                directoriesFirst_MenuItem.setDisable(false);
+                directoriesFirst_MenuItem.setSelected(false);
+            }
+        });
 
         sortBy_Menu = new Menu("Sort by");
-        sortBy_Menu.getItems().addAll(sortByName_MenuItem, sortByType_MenuItem,
-                sortBySize_MenuItem, sortByOwner_MenuItem, sortByCreationTime_MenuItem,
-                sortByLastModifiedTime_MenuItem,
-                new SeparatorMenuItem(), ascendingSortType_MenuItem, descendingSortType_MenuItem,
-                new SeparatorMenuItem());
+        sortBy_Menu.getItems().addAll(directoriesFirst_MenuItem, new SeparatorMenuItem(), sortByName_MenuItem,
+                sortByType_MenuItem, sortBySize_MenuItem, sortByOwner_MenuItem,
+                sortByCreationTime_MenuItem, sortByLastModifiedTime_MenuItem, new SeparatorMenuItem(),
+                ascendingSortType_MenuItem, descendingSortType_MenuItem, new SeparatorMenuItem());
 
         menu_Bar = new MenuBar(file_Menu, goTo_Menu, sortBy_Menu);
 
@@ -312,6 +346,7 @@ public class FM_GUI extends Application
             contentKeyPressed_Action(event);
         });
         content_TreeTableView.getSortOrder().addAll(nameColumn, typeColumn);
+        sortType = TreeTableColumn.SortType.ASCENDING;
         lastActiveSortColumn = nameColumn;
         content_TreeTableView.setTableMenuButtonVisible(true);
 
@@ -592,6 +627,12 @@ public class FM_GUI extends Application
     {
         lastActiveSortColumn = targetColumn;
         targetColumn.setSortable(true);
+        typeColumn.setSortable(true);
+        nameColumn.setSortable(true);
+        sizeColumn.setSortable(true);
+        ownerColumn.setSortable(true);
+        creationTimeColumn.setSortable(true);
+        lastModifiedTimeColumn.setSortable(true);
 
         if (content_TreeTableView.getExpandedItemCount() < 2)
         {
@@ -600,10 +641,30 @@ public class FM_GUI extends Application
 
         targetColumn.setSortType(sortType);
         content_TreeTableView.getSortOrder().clear();
-        content_TreeTableView.getSortOrder().add(targetColumn);
+
+        //Работает корректно, если сортируется сначала по имени, а затем
+        //по типу.
+        //content_TreeTableView.getSortOrder().addAll(typeColumn,targetColumn);
+
+        if (directoriesFirst_MenuItem.isSelected())
+        {
+            typeColumn.setSortType(TreeTableColumn.SortType.DESCENDING);
+            content_TreeTableView.getSortOrder().add(typeColumn);
+            //typeColumn.setS
+        }
+
+        content_TreeTableView.getSortOrder().addAll(targetColumn);
+
+
         content_TreeTableView.sort();
 
         targetColumn.setSortable(false);
+        typeColumn.setSortable(false);
+        nameColumn.setSortable(false);
+        sizeColumn.setSortable(false);
+        ownerColumn.setSortable(false);
+        creationTimeColumn.setSortable(false);
+        lastModifiedTimeColumn.setSortable(false);
     }
 
 }
