@@ -59,6 +59,7 @@ public class FM_GUI extends Application
     public final String FIlE_SYSTEMS_PATH = "file systems:///";
     private Path currentPath;
     private TreeTableColumn.SortType sortType;
+    private CustomTreeTableColumn<FileData, ?> lastActiveSortColumn;
 
     private MenuBar menu_Bar;
     private Menu file_Menu;
@@ -177,28 +178,28 @@ public class FM_GUI extends Application
         sortByName_MenuItem.setSelected(true);
         sortByName_MenuItem.setOnAction(event ->
         {
-            requestSort();
+            requestSort(nameColumn);
         });
         sortByName_MenuItem.setToggleGroup(sortBy_ToggleGroup);
 
         sortBySize_MenuItem = new RadioMenuItem("by Size");
         sortBySize_MenuItem.setOnAction(event ->
         {
-            requestSort();
+            requestSort(sizeColumn);
         });
         sortBySize_MenuItem.setToggleGroup(sortBy_ToggleGroup);
 
         sortByType_MenuItem = new RadioMenuItem("by Type");
         sortByType_MenuItem.setOnAction(event ->
         {
-            requestSort();
+            requestSort(typeColumn);
         });
         sortByType_MenuItem.setToggleGroup(sortBy_ToggleGroup);
 
         sortByOwner_MenuItem = new RadioMenuItem("by Owner");
         sortByOwner_MenuItem.setOnAction(event ->
         {
-            requestSort();
+            requestSort(ownerColumn);
         });
         sortByOwner_MenuItem.setToggleGroup(sortBy_ToggleGroup);
         sortByOwner_MenuItem.setDisable(true);
@@ -207,7 +208,7 @@ public class FM_GUI extends Application
         sortByCreationTime_MenuItem = new RadioMenuItem("by Creation Time");
         sortByCreationTime_MenuItem.setOnAction(event ->
         {
-            requestSort();
+            requestSort(creationTimeColumn);
         });
         sortByCreationTime_MenuItem.setToggleGroup(sortBy_ToggleGroup);
         sortByCreationTime_MenuItem.setDisable(true);
@@ -216,7 +217,7 @@ public class FM_GUI extends Application
         sortByLastModifiedTime_MenuItem = new RadioMenuItem("by Last modified Time");
         sortByLastModifiedTime_MenuItem.setOnAction(event ->
         {
-            requestSort();
+            requestSort(lastModifiedTimeColumn);
         });
         sortByLastModifiedTime_MenuItem.setToggleGroup(sortBy_ToggleGroup);
         sortByLastModifiedTime_MenuItem.setDisable(true);
@@ -228,7 +229,7 @@ public class FM_GUI extends Application
         ascendingSortType_MenuItem.setOnAction(event ->
         {
             sortType = TreeTableColumn.SortType.ASCENDING;
-            requestSort();
+            requestSort(lastActiveSortColumn);
         });
 
         descendingSortType_MenuItem = new RadioMenuItem("Descending");
@@ -236,7 +237,7 @@ public class FM_GUI extends Application
         descendingSortType_MenuItem.setOnAction(event ->
         {
             sortType = TreeTableColumn.SortType.DESCENDING;
-            requestSort();
+            requestSort(lastActiveSortColumn);
         });
 
         sortType = TreeTableColumn.SortType.ASCENDING;
@@ -282,10 +283,6 @@ public class FM_GUI extends Application
         typeColumn = new CustomTreeTableColumn<>("Type");
         typeColumn.setMinWidth(preferredWidth * 0.1D);
         typeColumn.setSortable(false);
-//        ownerColumn.visibleProperty().addListener((event) ->
-//        {
-//           ownerColumn
-//        });
 
         nameColumn.setCellValueFactory((TreeTableColumn.CellDataFeatures<FileData, String> param) ->
                 new ReadOnlyStringWrapper(param.getValue().getValue().getName()));
@@ -314,7 +311,8 @@ public class FM_GUI extends Application
         {
             contentKeyPressed_Action(event);
         });
-        content_TreeTableView.getSortOrder().add(nameColumn);
+        content_TreeTableView.getSortOrder().addAll(nameColumn, typeColumn);
+        lastActiveSortColumn = nameColumn;
         content_TreeTableView.setTableMenuButtonVisible(true);
 
         EventHandler<MouseEvent> mouseClickEvent = new EventHandler<>()
@@ -508,7 +506,7 @@ public class FM_GUI extends Application
             content_TreeTableView.getSelectionModel().select(0);
         }
 
-        requestSort();
+        requestSort(lastActiveSortColumn);
         return true;
     }
 
@@ -590,66 +588,22 @@ public class FM_GUI extends Application
      * во время срабатывания контекстного меню компонент не запрашивал сортировку
      * самостоятельно.
      */
-    private void requestSort()
+    private void requestSort(CustomTreeTableColumn<FileData, ?> targetColumn)
     {
-        nameColumn.setSortable(true);
-        sizeColumn.setSortable(true);
-        ownerColumn.setSortable(true);
-        typeColumn.setSortable(true);
-        creationTimeColumn.setSortable(true);
-        lastModifiedTimeColumn.setSortable(true);
+        lastActiveSortColumn = targetColumn;
+        targetColumn.setSortable(true);
 
         if (content_TreeTableView.getExpandedItemCount() < 2)
         {
             return;
         }
 
-        if (sortByName_MenuItem.isSelected())
-        {
-            nameColumn.setSortType(sortType);
-            content_TreeTableView.getSortOrder().clear();
-            System.out.println("size: " + content_TreeTableView.getSortOrder().size());
-            content_TreeTableView.getSortOrder().add(nameColumn);
-        }
-        else if (sortBySize_MenuItem.isSelected())
-        {
-            sizeColumn.setSortType(sortType);
-            content_TreeTableView.getSortOrder().clear();
-            content_TreeTableView.getSortOrder().add(sizeColumn);
-        }
-        else if (sortByOwner_MenuItem.isSelected())
-        {
-            ownerColumn.setSortType(sortType);
-            content_TreeTableView.getSortOrder().clear();
-            content_TreeTableView.getSortOrder().add(ownerColumn);
-        }
-        else if (sortByType_MenuItem.isSelected())
-        {
-            typeColumn.setSortType(sortType);
-            content_TreeTableView.getSortOrder().clear();
-            content_TreeTableView.getSortOrder().add(typeColumn);
-        }
-        else if (sortByCreationTime_MenuItem.isSelected())
-        {
-            creationTimeColumn.setSortType(sortType);
-            content_TreeTableView.getSortOrder().clear();
-            content_TreeTableView.getSortOrder().add(creationTimeColumn);
-        }
-        else if (sortByLastModifiedTime_MenuItem.isSelected())
-        {
-            lastModifiedTimeColumn.setSortType(sortType);
-            content_TreeTableView.getSortOrder().clear();
-            content_TreeTableView.getSortOrder().add(lastModifiedTimeColumn);
-        }
-
+        targetColumn.setSortType(sortType);
+        content_TreeTableView.getSortOrder().clear();
+        content_TreeTableView.getSortOrder().add(targetColumn);
         content_TreeTableView.sort();
 
-        nameColumn.setSortable(false);
-        sizeColumn.setSortable(false);
-        ownerColumn.setSortable(false);
-        typeColumn.setSortable(false);
-        creationTimeColumn.setSortable(false);
-        lastModifiedTimeColumn.setSortable(false);
+        targetColumn.setSortable(false);
     }
 
 }
