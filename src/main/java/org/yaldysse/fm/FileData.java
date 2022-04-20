@@ -47,6 +47,8 @@ public class FileData
         }
     }
 
+
+
     public void setName(String newName)
     {
         name = newName;
@@ -167,15 +169,15 @@ public class FileData
 
     public String getType()
     {
-        if(hasDirectory)
+        if (hasDirectory)
         {
-            return "ZDirectory";
+            return "Directory";
         }
-        else if(hasFile)
+        else if (hasFile)
         {
             return "File";
         }
-        else if(hasSymbolicLink)
+        else if (hasSymbolicLink)
         {
             return "Symbolic Link";
         }
@@ -195,5 +197,17 @@ public class FileData
     public boolean isSymbolicLink()
     {
         return hasSymbolicLink;
+    }
+
+    public FileData clone()
+    {
+        FileData temporaryFileData = new FileData(getName(),getSize() );
+        temporaryFileData.setOwner(getOwner());
+        temporaryFileData.setCreationTime(getCreationTime());
+        temporaryFileData.setLastModifiedTime(getLastModifiedTime());
+        temporaryFileData.setFile(hasFile);
+        temporaryFileData.setDirectory(hasDirectory);
+        temporaryFileData.setSymbolicLink(hasSymbolicLink);
+        return temporaryFileData;
     }
 }

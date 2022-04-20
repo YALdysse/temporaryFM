@@ -1,33 +1,43 @@
 package org.yaldysse.fm;
 
+import javafx.animation.KeyFrame;
+import javafx.animation.Timeline;
 import javafx.application.Application;
 import javafx.beans.property.Property;
 import javafx.beans.property.ReadOnlyObjectWrapper;
 import javafx.beans.property.ReadOnlyStringWrapper;
+import javafx.collections.ObservableList;
 import javafx.event.ActionEvent;
 import javafx.event.EventHandler;
 import javafx.geometry.Insets;
+import javafx.geometry.Pos;
+import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.CheckBoxTreeTableCell;
 import javafx.scene.control.skin.TableColumnHeader;
 import javafx.scene.input.*;
-import javafx.scene.layout.BorderPane;
-import javafx.scene.layout.Region;
-import javafx.scene.layout.VBox;
+import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
+import javafx.scene.paint.CycleMethod;
+import javafx.scene.paint.LinearGradient;
+import javafx.scene.paint.Stop;
 import javafx.scene.text.Font;
+import javafx.scene.text.FontWeight;
 import javafx.scene.text.Text;
+import javafx.stage.Modality;
 import javafx.stage.Stage;
+import javafx.stage.StageStyle;
 import javafx.util.Callback;
+import javafx.util.Duration;
 
+import javax.xml.stream.XMLOutputFactory;
+import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -74,6 +84,9 @@ public class FM_GUI extends Application
     private RadioMenuItem sortByCreationTime_MenuItem;
     private RadioMenuItem sortByLastModifiedTime_MenuItem;
     private CheckMenuItem directoriesFirst_MenuItem;
+    private Menu edit_Menu;
+    private MenuItem delete_MenuItem;
+    private MenuItem rename_MenuItem;
 
     private ToggleGroup sortBy_ToggleGroup;
     private RadioMenuItem descendingSortType_MenuItem;
@@ -84,8 +97,12 @@ public class FM_GUI extends Application
     private MenuItem goToHomeDirectory_MenuItem;
     private MenuItem goToUserDirectory_MenuItem;
     private MenuItem exit_MenuItem;
+    private MenuItem copyFileName_MenuItem;
+    private MenuItem copyAbsoluteNamePath_MenuItem;
 
     private CheckMenuItem autoSizeColumn_MenuItem;
+
+    private ConfirmOperationDialog confirmOperationDialog;
 
 
     @Override
@@ -119,6 +136,12 @@ public class FM_GUI extends Application
         initializeMenu();
         initializeContextMenuForColumns();
 
+        confirmOperationDialog = new ConfirmOperationDialog(StageStyle.UTILITY,
+                "");
+        confirmOperationDialog.setOperationButtons(ConfirmDialogButtonType.CANCEL, ConfirmDialogButtonType.OK);
+        confirmOperationDialog.initOwner(stage);
+        confirmOperationDialog.initModality(Modality.APPLICATION_MODAL);
+
         root.getChildren().addAll(menu_BorderPane, content_VBox);
         content_TreeTableView.requestFocus();
     }
@@ -132,8 +155,22 @@ public class FM_GUI extends Application
         });
         exit_MenuItem.setAccelerator(new KeyCodeCombination(KeyCode.Q, KeyCombination.CONTROL_DOWN));
 
-        file_Menu = new Menu("File");
-        file_Menu.getItems().addAll(exit_MenuItem);
+        copyFileName_MenuItem = new MenuItem("Copy name of file");
+        copyFileName_MenuItem.setAccelerator(new KeyCodeCombination(KeyCode.C, KeyCombination.SHIFT_DOWN));
+        copyFileName_MenuItem.setOnAction(event ->
+        {
+            copyFileName_MenuItem_Action(event);
+        });
+
+        copyAbsoluteNamePath_MenuItem = new MenuItem("Copy absolute path of file");
+        copyAbsoluteNamePath_MenuItem.setAccelerator(new KeyCodeCombination(KeyCode.C, KeyCombination.ALT_DOWN));
+        copyAbsoluteNamePath_MenuItem.setOnAction(event ->
+        {
+            copyAbsoluteNamePath_MenuItem_Action(event);
+        });
+
+        file_Menu = new Menu("Main");
+        file_Menu.getItems().addAll(copyFileName_MenuItem, copyAbsoluteNamePath_MenuItem, new SeparatorMenuItem(), exit_MenuItem);
 
         goToParent_MenuItem = new MenuItem("Parent directory");
         goToParent_MenuItem.setOnAction(event ->
@@ -150,7 +187,7 @@ public class FM_GUI extends Application
                 addCustomToContentInTable(FIlE_SYSTEMS_PATH, rootPath.toString());
             }
         });
-        goToRootDirectories_MenuItem.setAccelerator(new KeyCodeCombination(KeyCode.SLASH, KeyCodeCombination.CONTROL_DOWN));
+        goToRootDirectories_MenuItem.setAccelerator(new KeyCodeCombination(KeyCode.SLASH, KeyCodeCombination.ALT_DOWN));
 
         goToHomeDirectory_MenuItem = new MenuItem("Home directory");
         goToHomeDirectory_MenuItem.setOnAction(event ->
@@ -158,7 +195,7 @@ public class FM_GUI extends Application
             String userDirectory = System.getProperty("user.home");
             goToPath(Paths.get(userDirectory));
         });
-        goToHomeDirectory_MenuItem.setAccelerator(new KeyCodeCombination(KeyCode.HOME, KeyCodeCombination.CONTROL_DOWN));
+        goToHomeDirectory_MenuItem.setAccelerator(new KeyCodeCombination(KeyCode.HOME, KeyCodeCombination.ALT_DOWN));
 
         goToUserDirectory_MenuItem = new MenuItem("User directory");
         goToUserDirectory_MenuItem.setOnAction(event ->
@@ -166,7 +203,7 @@ public class FM_GUI extends Application
             String userDirectory = System.getProperty("user.dir");
             goToPath(Paths.get(userDirectory));
         });
-        goToUserDirectory_MenuItem.setAccelerator(new KeyCodeCombination(KeyCode.HOME, KeyCodeCombination.CONTROL_DOWN));
+        goToUserDirectory_MenuItem.setAccelerator(new KeyCodeCombination(KeyCode.U, KeyCodeCombination.ALT_DOWN));
 
 
         goTo_Menu = new Menu("Go to...");
@@ -283,7 +320,26 @@ public class FM_GUI extends Application
                 sortByCreationTime_MenuItem, sortByLastModifiedTime_MenuItem, new SeparatorMenuItem(),
                 ascendingSortType_MenuItem, descendingSortType_MenuItem, new SeparatorMenuItem());
 
-        menu_Bar = new MenuBar(file_Menu, goTo_Menu, sortBy_Menu);
+
+        edit_Menu = new Menu("Edit");
+
+        delete_MenuItem = new MenuItem("Delete");
+        delete_MenuItem.setAccelerator(new KeyCodeCombination(KeyCode.DELETE));
+        delete_MenuItem.setOnAction(event ->
+        {
+            delete_MenuItem_Action();
+        });
+
+        rename_MenuItem = new MenuItem("Rename");
+        rename_MenuItem.setAccelerator(new KeyCodeCombination(KeyCode.F2));
+        rename_MenuItem.setOnAction(event ->
+        {
+            rename_MenuItem_Action();
+        });
+
+        edit_Menu.getItems().addAll(rename_MenuItem, delete_MenuItem);
+
+        menu_Bar = new MenuBar(file_Menu, edit_Menu, goTo_Menu, sortBy_Menu);
 
         menu_BorderPane = new BorderPane();
         menu_BorderPane.setTop(menu_Bar);
@@ -294,10 +350,12 @@ public class FM_GUI extends Application
         nameColumn = new CustomTreeTableColumn<>("Name");
         nameColumn.setMinWidth(preferredWidth * 0.1D);
         nameColumn.setSortable(false);
+        nameColumn.setMaxWidth(Integer.MAX_VALUE * 0.5);
 
         sizeColumn = new CustomTreeTableColumn<>("Size");
         sizeColumn.setMinWidth(preferredWidth * 0.05D);
         sizeColumn.setSortable(false);
+        sizeColumn.setMaxWidth(Integer.MAX_VALUE * 0.3);
 
         ownerColumn = new CustomTreeTableColumn<>("Owner");
         ownerColumn.setMinWidth(preferredWidth * 0.1D);
@@ -317,6 +375,8 @@ public class FM_GUI extends Application
         typeColumn = new CustomTreeTableColumn<>("Type");
         typeColumn.setMinWidth(preferredWidth * 0.1D);
         typeColumn.setSortable(false);
+        typeColumn.setMaxWidth(Integer.MAX_VALUE * 0.2);
+
 
         nameColumn.setCellValueFactory((TreeTableColumn.CellDataFeatures<FileData, String> param) ->
                 new ReadOnlyStringWrapper(param.getValue().getValue().getName()));
@@ -542,6 +602,12 @@ public class FM_GUI extends Application
         }
 
         requestSort(lastActiveSortColumn);
+
+        if (content_TreeTableView.getExpandedItemCount() != 0)
+        {
+            content_TreeTableView.getSelectionModel().clearSelection();
+            content_TreeTableView.getSelectionModel().select(0);
+        }
         return true;
     }
 
@@ -589,6 +655,14 @@ public class FM_GUI extends Application
             {
                 goToPath(Paths.get(content_TreeTableView.getSelectionModel().getSelectedItem().getValue().getName()));
             }
+        }
+        if (event.getCode() == KeyCode.F10)
+        {
+            ConfirmOperationDialog confirmOperation = new ConfirmOperationDialog(StageStyle.UTILITY,
+                    "Rename File");
+            confirmOperation.setOperationButtons(ConfirmDialogButtonType.CANCEL, ConfirmDialogButtonType.OK);
+            confirmOperation.showAndWait();
+            System.out.println("Была нажат кнопка: " + confirmOperation.getActivatedOperationButton().toString());
         }
 //        else if(event.getCode() == KeyCode.HOME)
 //        {
@@ -658,6 +732,37 @@ public class FM_GUI extends Application
 
         content_TreeTableView.sort();
 
+        //================ Проверка на то, что каталоги действительно идут первыми
+        if (directoriesFirst_MenuItem.isSelected())
+        {
+            int temporaryLength = 3;
+            if (temporaryLength > content_TreeTableView.getExpandedItemCount())
+            {
+                temporaryLength = content_TreeTableView.getExpandedItemCount();
+            }
+
+            for (int k = 0; k < temporaryLength; k++)
+            {
+                if (content_TreeTableView.getTreeItem(k).getValue().isDirectory())
+                {
+                    System.out.println("Директория");
+                }
+                else
+                {
+                    System.out.println("Скорее всего нужно поменять тип сортировки.");
+                    if (typeColumn.getSortType() == TreeTableColumn.SortType.ASCENDING)
+                    {
+                        typeColumn.setSortType(TreeTableColumn.SortType.DESCENDING);
+                    }
+                    else
+                    {
+                        typeColumn.setSortType(TreeTableColumn.SortType.ASCENDING);
+                    }
+                }
+            }
+        }
+        //=============================================================
+
         targetColumn.setSortable(false);
         typeColumn.setSortable(false);
         nameColumn.setSortable(false);
@@ -667,4 +772,269 @@ public class FM_GUI extends Application
         lastModifiedTimeColumn.setSortable(false);
     }
 
+    /**
+     * @deprecated Не оптимизирован.
+     */
+    private void delete_MenuItem_Action()
+    {
+        System.out.println("Запрос на удаление");
+
+        VBox filesToDeleting_VBox = new VBox(rem * 0.15D);
+        Label[] files_Labels = null;
+
+        ObservableList<TreeItem<FileData>> files_ObservableList = content_TreeTableView.getSelectionModel().getSelectedItems();
+        files_Labels = new Label[files_ObservableList.size()];
+        for (int k = 0; k < files_ObservableList.size(); k++)
+        {
+            files_Labels[k] = new Label(files_ObservableList.get(k).getValue().getName());
+            filesToDeleting_VBox.getChildren().add(files_Labels[k]);
+        }
+
+
+        confirmOperationDialog.setHeaderText("Delete");
+        confirmOperationDialog.setHeaderColor(Color.INDIANRED);
+        confirmOperationDialog.setMessageText("Are you sure You want to delete this file ?");
+        //confirmOperationDialog.setOperationButtons(ConfirmDialogButtonType.CANCEL, ConfirmDialogButtonType.OK);
+        confirmOperationDialog.setContent(filesToDeleting_VBox);
+        confirmOperationDialog.setBackgroundToRootNode(new Background(
+                new BackgroundFill(Color.DARKSALMON, CornerRadii.EMPTY, Insets.EMPTY)));
+        confirmOperationDialog.setMessageTextColor(Color.BLACK);
+        confirmOperationDialog.setMessageTextFont(Font.font(Font.getDefault().getName(),
+                FontWeight.BOLD, 13.0D));
+        confirmOperationDialog.showAndWait();
+        System.out.println("Выбрана кнопка: " + confirmOperationDialog.getActivatedOperationButton().name());
+
+        if (confirmOperationDialog.getActivatedOperationButton() == ConfirmDialogButtonType.OK)
+        {
+            try
+            {
+                String temporaryName = null;
+                Path temporaryPath = null;
+                for (int k = 0; k < files_ObservableList.size(); k++)
+                {
+                    temporaryName = files_ObservableList.get(k).getValue().getName();
+                    temporaryPath = currentPath.resolve(Paths.get(temporaryName));
+                    System.out.println("На удаление: " + temporaryPath.toAbsolutePath().toString());
+                    if (deleteFileRecursively(temporaryPath))
+                    {
+                        System.out.println("Успешно удалено.");
+                        System.out.println("Элемент: " + files_ObservableList.get(k).getValue().getName());
+                    }
+
+                }
+
+                //Обновляем плохим образом, ибо хорошим нету больше сил.
+                goToPath(currentPath);
+                //removeRowsFromTreeTableView(files_ObservableList);
+
+            }
+            catch (IOException ioException)
+            {
+                ioException.printStackTrace();
+            }
+        }
+
+    }
+
+    private boolean deleteFileRecursively(Path targetPath) throws IOException
+    {
+        if (!Files.exists(targetPath))
+        {
+            return false;
+        }
+
+        if (Files.isRegularFile(targetPath))
+        {
+            Files.delete(targetPath);
+        }
+        else if (Files.isDirectory(targetPath))
+        {
+            Stream<Path> pathsStream = Files.list(targetPath);
+            List<Path> pathsList = pathsStream.collect(Collectors.toList());
+            if (pathsList.size() == 0)
+            {
+                Files.delete(targetPath);
+            }
+            else
+            {
+                for (Path temporaryPath : pathsList)
+                {
+                    System.out.println(deleteFileRecursively(temporaryPath));
+                }
+                deleteFileRecursively(targetPath);
+            }
+
+        }
+
+        return true;
+    }
+
+    /**
+     * @deprecated Работает не корректно.
+     */
+    private void removeRowsFromTreeTableView(ObservableList<TreeItem<FileData>> targetRows)
+    {
+        Iterator<TreeItem<FileData>> iterator = targetRows.iterator();
+        while (iterator.hasNext())
+        {
+            FileData temporaryItem = iterator.next().getValue();
+            String name = temporaryItem.getName();
+            System.out.println("Item: " + name);
+            System.out.println("size: " + root.getChildren().size());
+            root.getChildren().remove(temporaryItem);
+        }
+    }
+
+    /**
+     * Пока, только для одиночного переименования
+     */
+    private void rename_MenuItem_Action()
+    {
+        System.out.println("Запрос на переименования");
+
+        VBox fileName_VBox = new VBox(rem * 0.15D);
+        fileName_VBox.setAlignment(Pos.CENTER);
+//        fileName_VBox.setBackground(new Background(new BackgroundFill(Color.LIGHTCYAN,
+//                CornerRadii.EMPTY, Insets.EMPTY)));
+
+        final Label fileAlreadyExists_Label = new Label("File with the same name already exists.");
+        fileAlreadyExists_Label.setWrapText(true);
+        fileAlreadyExists_Label.setVisible(false);
+        fileAlreadyExists_Label.setTextFill(Color.LIGHTCORAL);
+        //fileAlreadyExists_Label.setBackground(new Background(new BackgroundFill(Color.LIGHTCYAN, CornerRadii.EMPTY, Insets.EMPTY)));
+        fileAlreadyExists_Label.setFont(Font.font(fileAlreadyExists_Label.getFont().getName(),
+                FontWeight.BOLD, 12.0D));
+
+        TextField fileName_TextField = new TextField();
+        fileName_TextField.setPromptText("Enter new name here");
+        fileName_TextField.setOnKeyPressed(event ->
+        {
+            if (fileAlreadyExists_Label != null)
+            {
+                fileAlreadyExists_Label.setVisible(false);
+            }
+        });
+
+
+        FileData temporaryFileData = content_TreeTableView.getSelectionModel().getSelectedItem().getValue();
+        Path temporaryPath = currentPath.resolve(temporaryFileData.getName());
+
+        fileName_TextField.setText(temporaryFileData.getName());
+
+
+        fileName_VBox.getChildren().addAll(fileName_TextField, fileAlreadyExists_Label);
+
+        confirmOperationDialog.setTitle("Rename");
+        confirmOperationDialog.setHeaderText("Rename");
+        confirmOperationDialog.setHeaderColor(Color.INDIGO);
+        confirmOperationDialog.setMessageText("Enter a new name below.");
+        confirmOperationDialog.setMessageTextColor(Color.BLACK);
+        confirmOperationDialog.setMessageTextFont(Font.font(Font.getDefault().getName(), FontWeight.BOLD, 13.0D));
+        //confirmOperationDialog.setOperationButtons(ConfirmDialogButtonType.CANCEL, ConfirmDialogButtonType.OK);
+        confirmOperationDialog.setContent(fileName_VBox);
+        confirmOperationDialog.setConfirmOperationOnEnterKey(true);
+        confirmOperationDialog.setBackgroundToRootNode(new Background(new BackgroundFill(Color.DARKSEAGREEN, CornerRadii.EMPTY, Insets.EMPTY)));
+        confirmOperationDialog.getScene().setFill(Color.LIGHTCYAN);
+
+        ObservableList<Node> nodes = confirmOperationDialog.getOperationButtons();
+        for (int k = 0; k < nodes.size(); k++)
+        {
+            ConfirmOperationButton temporaryConfirmOperationButton = (ConfirmOperationButton) nodes.get(k);
+            temporaryConfirmOperationButton.setBackground(Background.EMPTY);
+            temporaryConfirmOperationButton.setBorder(new Border(new BorderStroke(Color.BLACK,
+                    BorderStrokeStyle.SOLID, CornerRadii.EMPTY, BorderStroke.MEDIUM, Insets.EMPTY)));
+        }
+        confirmOperationDialog.showAndWait();
+        System.out.println("Выбрана кнопка: " + confirmOperationDialog.getActivatedOperationButton().name());
+
+        if (confirmOperationDialog.getActivatedOperationButton() == ConfirmDialogButtonType.OK)
+        {
+            while (true)
+            {
+                try
+                {
+                    Path targetPath = currentPath.resolve(fileName_TextField.getText());
+                    Path resultPath = Files.move(temporaryPath, targetPath);
+
+                    FileData temporaryData = content_TreeTableView.getSelectionModel().getSelectedItem().getValue();
+                    temporaryData = temporaryData.clone();
+                    temporaryData.setName(targetPath.getFileName().toString());
+                    content_TreeTableView.getSelectionModel().getSelectedItem().setValue(temporaryData);
+
+                    if (resultPath != null)
+                    {
+                        break;
+                    }
+                }
+                catch (FileAlreadyExistsException fileAlreadyExistsException)
+                {
+                    //fileAlreadyExistsException.printStackTrace();
+                    System.out.println("Файл с таким именем уже существует.");
+                    fileAlreadyExists_Label.setVisible(true);
+                    confirmOperationDialog.showAndWait();
+                }
+                catch (NoSuchFileException noSuchFileException)
+                {
+                    //fileAlreadyExistsException.printStackTrace();
+                    System.out.println("Обычно эта ошибка означает, что имя недопустимое.");
+                    break;
+                }
+                catch (IOException ioException)
+                {
+                    ioException.printStackTrace();
+                }
+            }
+        }
+    }
+
+    private void copyFileName_MenuItem_Action(ActionEvent event)
+    {
+        ClipboardContent clipboardContent = new ClipboardContent();
+        clipboardContent.putString(content_TreeTableView.getSelectionModel().getSelectedItem().getValue().getName());
+        if (Clipboard.getSystemClipboard().setContent(clipboardContent))
+        {
+            Tooltip tooltip = new Tooltip("Name of file has been copied.");
+            tooltip.setWrapText(true);
+            tooltip.setHideOnEscape(true);
+            tooltip.setAutoHide(true);
+            tooltip.setFont(Font.font(tooltip.getFont().getName(), FontWeight.BOLD, 12.0D));
+            tooltip.setOnShown(eventToolTip ->
+            {
+                Timeline timeline = new Timeline(new KeyFrame(Duration.seconds(2.0D), eventHide ->
+                {
+                    tooltip.hide();
+                }));
+                timeline.play();
+            });
+            Text temporaryText = new Text(tooltip.getText());
+            tooltip.show(stage, (stage.getX() + stage.getWidth() / 2.0D) -
+                    temporaryText.getBoundsInParent().getWidth() / 2.0D, stage.getY() + stage.getHeight() / 2);
+        }
+    }
+
+    private void copyAbsoluteNamePath_MenuItem_Action(ActionEvent event)
+    {
+        ClipboardContent clipboardContent = new ClipboardContent();
+        clipboardContent.putString(currentPath.resolve(content_TreeTableView.getSelectionModel().
+                getSelectedItem().getValue().getName()).toAbsolutePath().toString());
+        if (Clipboard.getSystemClipboard().setContent(clipboardContent))
+        {
+            Tooltip tooltip = new Tooltip("Absolute path of selected file has been copied.");
+            tooltip.setWrapText(true);
+            tooltip.setHideOnEscape(true);
+            tooltip.setAutoHide(true);
+            tooltip.setFont(Font.font(tooltip.getFont().getName(), FontWeight.BOLD, 12.0D));
+            tooltip.setOnShown(eventToolTip ->
+            {
+                Timeline timeline = new Timeline(new KeyFrame(Duration.seconds(3.0D), eventHide ->
+                {
+                    tooltip.hide();
+                }));
+                timeline.play();
+            });
+            Text temporaryText = new Text(tooltip.getText());
+            tooltip.show(stage, (stage.getX() + stage.getWidth() / 2.0D) -
+                    temporaryText.getBoundsInParent().getWidth() / 2.0D, stage.getY() + stage.getHeight() / 2);
+        }
+    }
 }
