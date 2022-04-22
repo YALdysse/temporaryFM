@@ -11,6 +11,7 @@ import javafx.event.ActionEvent;
 import javafx.event.EventHandler;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.Cursor;
 import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
@@ -36,9 +37,14 @@ import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.*;
-import java.nio.file.attribute.BasicFileAttributes;
+import java.nio.file.attribute.*;
+import java.time.*;
+import java.time.temporal.ChronoField;
+import java.time.temporal.ChronoUnit;
+import java.time.temporal.TemporalAccessor;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -99,6 +105,8 @@ public class FM_GUI extends Application
     private MenuItem exit_MenuItem;
     private MenuItem copyFileName_MenuItem;
     private MenuItem copyAbsoluteNamePath_MenuItem;
+    private MenuItem createFile_MenuItem;
+    private MenuItem createDirectory_MenuItem;
 
     private CheckMenuItem autoSizeColumn_MenuItem;
 
@@ -337,7 +345,22 @@ public class FM_GUI extends Application
             rename_MenuItem_Action();
         });
 
-        edit_Menu.getItems().addAll(rename_MenuItem, delete_MenuItem);
+        createFile_MenuItem = new MenuItem("Create file");
+        createFile_MenuItem.setAccelerator(new KeyCodeCombination(KeyCode.Y, KeyCombination.CONTROL_DOWN));
+        createFile_MenuItem.setOnAction(event ->
+        {
+            createFile_MenuItem_Action(event);
+        });
+
+        createDirectory_MenuItem = new MenuItem("Create directory");
+        createDirectory_MenuItem.setAccelerator(new KeyCodeCombination(KeyCode.N, KeyCombination.CONTROL_DOWN));
+        createDirectory_MenuItem.setOnAction(event ->
+        {
+            createDirectory_MenuItem_Action(event);
+        });
+
+        edit_Menu.getItems().addAll(createFile_MenuItem, createDirectory_MenuItem,
+                new SeparatorMenuItem(), rename_MenuItem, delete_MenuItem);
 
         menu_Bar = new MenuBar(file_Menu, edit_Menu, goTo_Menu, sortBy_Menu);
 
@@ -656,13 +679,24 @@ public class FM_GUI extends Application
                 goToPath(Paths.get(content_TreeTableView.getSelectionModel().getSelectedItem().getValue().getName()));
             }
         }
-        if (event.getCode() == KeyCode.F10)
+        if (event.getCode() == KeyCode.F2)
         {
-            ConfirmOperationDialog confirmOperation = new ConfirmOperationDialog(StageStyle.UTILITY,
-                    "Rename File");
-            confirmOperation.setOperationButtons(ConfirmDialogButtonType.CANCEL, ConfirmDialogButtonType.OK);
-            confirmOperation.showAndWait();
-            System.out.println("Была нажат кнопка: " + confirmOperation.getActivatedOperationButton().toString());
+            System.out.println("pizdes");
+            FileTime time = FileTime.fromMillis(35883295833L);
+            try
+            {
+                Path path = currentPath.resolve(content_TreeTableView.getSelectionModel().getSelectedItem()
+                        .getValue().getName());
+                FileTime timeFile = Files.readAttributes(currentPath.resolve(".dir_colors"), BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS).creationTime();
+                System.out.println(timeFile);
+                Files.getFileAttributeView(path, BasicFileAttributeView.class).setTimes(time, time, time);
+                System.out.println("Атрибуты должны быть установлеы.");
+            }
+            catch (IOException ioException)
+            {
+                ioException.printStackTrace();
+            }
+
         }
 //        else if(event.getCode() == KeyCode.HOME)
 //        {
@@ -716,20 +750,13 @@ public class FM_GUI extends Application
         targetColumn.setSortType(sortType);
         content_TreeTableView.getSortOrder().clear();
 
-        //Работает корректно, если сортируется сначала по имени, а затем
-        //по типу.
-        //content_TreeTableView.getSortOrder().addAll(typeColumn,targetColumn);
-
         if (directoriesFirst_MenuItem.isSelected())
         {
             typeColumn.setSortType(TreeTableColumn.SortType.DESCENDING);
             content_TreeTableView.getSortOrder().add(typeColumn);
-            //typeColumn.setS
         }
 
-        content_TreeTableView.getSortOrder().addAll(targetColumn);
-
-
+        content_TreeTableView.getSortOrder().add(targetColumn);
         content_TreeTableView.sort();
 
         //================ Проверка на то, что каталоги действительно идут первыми
@@ -833,7 +860,6 @@ public class FM_GUI extends Application
                 ioException.printStackTrace();
             }
         }
-
     }
 
     private boolean deleteFileRecursively(Path targetPath) throws IOException
@@ -934,7 +960,6 @@ public class FM_GUI extends Application
         confirmOperationDialog.setContent(fileName_VBox);
         confirmOperationDialog.setConfirmOperationOnEnterKey(true);
         confirmOperationDialog.setBackgroundToRootNode(new Background(new BackgroundFill(Color.DARKSEAGREEN, CornerRadii.EMPTY, Insets.EMPTY)));
-        confirmOperationDialog.getScene().setFill(Color.LIGHTCYAN);
 
         ObservableList<Node> nodes = confirmOperationDialog.getOperationButtons();
         for (int k = 0; k < nodes.size(); k++)
@@ -949,17 +974,13 @@ public class FM_GUI extends Application
 
         if (confirmOperationDialog.getActivatedOperationButton() == ConfirmDialogButtonType.OK)
         {
+            Path targetPath = null;
             while (true)
             {
                 try
                 {
-                    Path targetPath = currentPath.resolve(fileName_TextField.getText());
+                    targetPath = currentPath.resolve(fileName_TextField.getText());
                     Path resultPath = Files.move(temporaryPath, targetPath);
-
-                    FileData temporaryData = content_TreeTableView.getSelectionModel().getSelectedItem().getValue();
-                    temporaryData = temporaryData.clone();
-                    temporaryData.setName(targetPath.getFileName().toString());
-                    content_TreeTableView.getSelectionModel().getSelectedItem().setValue(temporaryData);
 
                     if (resultPath != null)
                     {
@@ -984,6 +1005,11 @@ public class FM_GUI extends Application
                     ioException.printStackTrace();
                 }
             }
+
+            FileData temporaryData = content_TreeTableView.getSelectionModel().getSelectedItem().getValue();
+            temporaryData = temporaryData.clone();
+            temporaryData.setName(targetPath.getFileName().toString());
+            content_TreeTableView.getSelectionModel().getSelectedItem().setValue(temporaryData);
         }
     }
 
@@ -1037,4 +1063,484 @@ public class FM_GUI extends Application
                     temporaryText.getBoundsInParent().getWidth() / 2.0D, stage.getY() + stage.getHeight() / 2);
         }
     }
+
+    /**
+     * @deprecated Не дописано.
+     */
+    private void createFile_MenuItem_Action(ActionEvent event)
+    {
+        System.out.println("Запрос на создание файла.");
+
+        VBox fileProperties_VBox = new VBox(rem * 0.15D);
+        fileProperties_VBox.setAlignment(Pos.CENTER);
+//        fileName_VBox.setBackground(new Background(new BackgroundFill(Color.LIGHTCYAN,
+//                CornerRadii.EMPTY, Insets.EMPTY)));
+
+        final Label fileAlreadyExists_Label = new Label("File with the same name already exists.");
+        fileAlreadyExists_Label.setWrapText(true);
+        fileAlreadyExists_Label.setVisible(false);
+        fileAlreadyExists_Label.setTextFill(Color.LIGHTCORAL);
+        //fileAlreadyExists_Label.setBackground(new Background(new BackgroundFill(Color.LIGHTCYAN, CornerRadii.EMPTY, Insets.EMPTY)));
+        fileAlreadyExists_Label.setFont(Font.font(fileAlreadyExists_Label.getFont().getName(),
+                FontWeight.BOLD, 12.0D));
+
+        TextField fileName_TextField = new TextField();
+        fileName_TextField.setPromptText("Enter name of file here");
+        fileName_TextField.setOnKeyPressed(textFieldEvent ->
+        {
+            if (fileAlreadyExists_Label != null)
+            {
+                fileAlreadyExists_Label.setVisible(false);
+            }
+        });
+
+        VBox accordionContent_VBox = new VBox(rem * 0.35D);
+
+        Accordion accordion = new Accordion();
+        TitledPane advanced_TitledPane = new TitledPane("Advanced", accordionContent_VBox);
+        accordion.getPanes().add(advanced_TitledPane);
+
+        HBox creationTime_HBox = new HBox(rem * 0.35D);
+        HBox lastModifiedDate_HBox = new HBox(rem * 0.35D);
+
+        DatePicker creationTime_DataPicker = new DatePicker();
+        creationTime_DataPicker.setShowWeekNumbers(true);
+        creationTime_DataPicker.setPromptText("Creation Date (DD.MM.YY)");
+
+        DatePicker lastModified_DataPicker = new DatePicker();
+        lastModified_DataPicker.setShowWeekNumbers(true);
+        lastModified_DataPicker.setPromptText("Last modified date (DD.MM.YY)");
+
+        CheckBox creationDateTime_CheckBox = new CheckBox("Creation Date-time");
+        creationDateTime_CheckBox.setOnAction(eventCheckBox ->
+        {
+            if (creationDateTime_CheckBox.isSelected())
+            {
+                //creationTime_CheckBox.setText("");
+                creationTime_HBox.getChildren().add(creationTime_DataPicker);
+            }
+            else
+            {
+                //creationTime_CheckBox.setText("Creation time");
+                creationTime_HBox.getChildren().remove(creationTime_DataPicker);
+            }
+        });
+
+        CheckBox lastModifiedData_CheckBox = new CheckBox("Last modified Date-time");
+        lastModifiedData_CheckBox.setOnAction(eventCheckBox ->
+        {
+            if (lastModifiedData_CheckBox.isSelected())
+            {
+                //creationTime_CheckBox.setText("");
+                lastModifiedDate_HBox.getChildren().add(lastModified_DataPicker);
+            }
+            else
+            {
+                //creationTime_CheckBox.setText("Creation time");
+                lastModifiedDate_HBox.getChildren().remove(lastModified_DataPicker);
+            }
+        });
+
+
+        creationTime_HBox.getChildren().add(creationDateTime_CheckBox);
+        lastModifiedDate_HBox.getChildren().add(lastModifiedData_CheckBox);
+
+        accordionContent_VBox.getChildren().addAll(creationTime_HBox, lastModifiedDate_HBox);
+
+        fileProperties_VBox.getChildren().addAll(fileName_TextField, fileAlreadyExists_Label,
+                accordion);
+
+        confirmOperationDialog.setTitle("Create File");
+        confirmOperationDialog.setHeaderText("Create File");
+        confirmOperationDialog.setHeaderColor(Color.web("#006c84"));
+        confirmOperationDialog.setMessageText("Enter a name of file below.");
+        confirmOperationDialog.setMessageTextColor(Color.BLACK);
+        confirmOperationDialog.setMessageTextFont(Font.font(Font.getDefault().getName(), FontWeight.BOLD, 13.0D));
+        //confirmOperationDialog.setOperationButtons(ConfirmDialogButtonType.CANCEL, ConfirmDialogButtonType.OK);
+        confirmOperationDialog.setContent(fileProperties_VBox);
+        confirmOperationDialog.setConfirmOperationOnEnterKey(true);
+        confirmOperationDialog.setBackgroundToRootNode(new Background(new BackgroundFill(Color.LIGHTSKYBLUE, CornerRadii.EMPTY, Insets.EMPTY)));
+        confirmOperationDialog.setMinHeight(confirmOperationDialog.rem * 18);
+        confirmOperationDialog.setMaxHeight(confirmOperationDialog.rem * 25);
+
+        ObservableList<Node> nodes = confirmOperationDialog.getOperationButtons();
+        for (int k = 0; k < nodes.size(); k++)
+        {
+            ConfirmOperationButton temporaryConfirmOperationButton = (ConfirmOperationButton) nodes.get(k);
+            temporaryConfirmOperationButton.setBackground(Background.EMPTY);
+            temporaryConfirmOperationButton.setBorder(new Border(new BorderStroke(Color.BLACK,
+                    BorderStrokeStyle.SOLID, CornerRadii.EMPTY, BorderStroke.MEDIUM, Insets.EMPTY)));
+        }
+
+        Path resultPath = null;
+        while (true)
+        {
+            confirmOperationDialog.showAndWait();
+            System.out.println("Выбрана кнопка: " + confirmOperationDialog.getActivatedOperationButton().name());
+
+            if (confirmOperationDialog.getActivatedOperationButton() == ConfirmDialogButtonType.OK)
+            {
+                try
+                {
+                    Path targetPath = currentPath.resolve(fileName_TextField.getText());
+                    resultPath = Files.createFile(targetPath);
+
+                    if (resultPath != null && Files.exists(resultPath))
+                    {
+                        //-------------------- Редактирование аттрибутов времени
+                        BasicFileAttributes basicFileAttributes = Files.readAttributes(resultPath, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
+
+                        FileTime creationTime = basicFileAttributes.creationTime();
+                        FileTime lastModifiedTime = basicFileAttributes.lastModifiedTime();
+                        FileTime lastAccessTime = basicFileAttributes.lastAccessTime();
+                        if (creationDateTime_CheckBox.isSelected())
+                        {
+                            LocalDateTime temporary = LocalDateTime.of(creationTime_DataPicker.getValue(),
+                                    LocalTime.now());
+                            Instant temporary_Instant = temporary.toInstant(ZoneOffset.UTC);
+                            creationTime = FileTime.from(temporary_Instant);
+
+                            if (temporary_Instant.isAfter(lastModifiedTime.toInstant()))
+                            {
+                                lastModifiedTime = FileTime.from(temporary_Instant);
+                            }
+
+                            if (System.getProperty("os.name").contains("Linux"))
+                            {
+                                lastModifiedTime = creationTime;
+                                lastAccessTime = creationTime;
+                            }
+                        }
+                        if (lastModifiedData_CheckBox.isSelected())
+                        {
+                            Instant lastModifiedTime_Instant = LocalDateTime.of(lastModified_DataPicker.getValue(),
+                                    LocalTime.now()).toInstant(ZoneOffset.UTC);
+                            lastModifiedTime = FileTime.from(lastModifiedTime_Instant);
+
+                            if (lastModifiedTime_Instant.isBefore(creationTime.toInstant()))
+                            {
+                                creationTime = FileTime.from(lastModifiedTime_Instant);
+                            }
+
+                            if (System.getProperty("os.name").contains("Linux"))
+                            {
+                                creationTime = lastModifiedTime;
+                                lastAccessTime = lastModifiedTime;
+                            }
+                        }
+//                        if(creationDateTime_CheckBox.isSelected() &&
+//                        lastModifiedData_CheckBox.isSelected())
+//                        {
+//                            //Дата редактирования не может быть раньше даты создания
+//                            if(creationTime.compareTo(lastModifiedTime) < 0)
+//                            {
+//                                System.out.println("Правильно!");
+//                            }
+//                            else
+//                            {
+//                                System.out.println("Дата редактирования не может быть ранешь даты создания!");
+//                                lastModifiedTime=creationTime;
+//                            }
+//                        }
+
+                        /*С атрибутами под Linux Manjaro ext4 обнаружена такая
+                         * хрень: изменения атрибутов не применяются, если
+                         * вызывать метод setTime() с разными параметрами времени.
+                         * Другими словами, чтобы метод записал изменения нужно
+                         * чтобы даты создания, редактирования и последнего доступа
+                         * были одинаковыми.*/
+                        Files.getFileAttributeView(resultPath, BasicFileAttributeView.class).setTimes(lastModifiedTime, lastAccessTime, creationTime);
+                        System.out.println("Аттрибуты должны быть записаны записаны.");
+                        addRowToTreeTable(resultPath);
+                        break;
+                    }
+                }
+                catch (FileAlreadyExistsException fileAlreadyExistsException)
+                {
+                    //fileAlreadyExistsException.printStackTrace();
+                    System.out.println("Файл с таким именем уже существует.");
+                    fileAlreadyExists_Label.setVisible(true);
+                }
+//                catch (NoSuchFileException noSuchFileException)
+//                {
+//                    //fileAlreadyExistsException.printStackTrace();
+//                    System.out.println("Обычно эта ошибка означает, что имя недопустимое.");
+//                    break;
+//                }
+                catch (IOException ioException)
+                {
+                    ioException.printStackTrace();
+                }
+            }
+            else if (confirmOperationDialog.getActivatedOperationButton() == ConfirmDialogButtonType.CANCEL)
+            {
+                break;
+            }
+        }
+    }
+
+
+    /**
+     * @deprecated Не дописано.
+     */
+    private void createDirectory_MenuItem_Action(ActionEvent event)
+    {
+        System.out.println("Запрос на создание каталога.");
+
+        VBox fileProperties_VBox = new VBox(rem * 0.15D);
+        fileProperties_VBox.setAlignment(Pos.CENTER);
+//        fileName_VBox.setBackground(new Background(new BackgroundFill(Color.LIGHTCYAN,
+//                CornerRadii.EMPTY, Insets.EMPTY)));
+
+        final Label fileAlreadyExists_Label = new Label("File with the same name already exists.");
+        fileAlreadyExists_Label.setWrapText(true);
+        fileAlreadyExists_Label.setVisible(false);
+        fileAlreadyExists_Label.setTextFill(Color.LIGHTCORAL);
+        //fileAlreadyExists_Label.setBackground(new Background(new BackgroundFill(Color.LIGHTCYAN, CornerRadii.EMPTY, Insets.EMPTY)));
+        fileAlreadyExists_Label.setFont(Font.font(fileAlreadyExists_Label.getFont().getName(),
+                FontWeight.BOLD, 12.0D));
+
+        TextField fileName_TextField = new TextField();
+        fileName_TextField.setPromptText("Enter name of directory here");
+        fileName_TextField.setOnKeyPressed(textFieldEvent ->
+        {
+            if (fileAlreadyExists_Label != null)
+            {
+                fileAlreadyExists_Label.setVisible(false);
+            }
+        });
+
+        VBox accordionContent_VBox = new VBox(rem * 0.35D);
+
+        Accordion accordion = new Accordion();
+        TitledPane advanced_TitledPane = new TitledPane("Advanced", accordionContent_VBox);
+        accordion.getPanes().add(advanced_TitledPane);
+
+        HBox creationTime_HBox = new HBox(rem * 0.35D);
+        HBox lastModifiedDate_HBox = new HBox(rem * 0.35D);
+
+        DatePicker creationTime_DataPicker = new DatePicker();
+        creationTime_DataPicker.setShowWeekNumbers(true);
+        creationTime_DataPicker.setPromptText("Creation Date (DD.MM.YY)");
+
+        DatePicker lastModified_DataPicker = new DatePicker();
+        lastModified_DataPicker.setShowWeekNumbers(true);
+        lastModified_DataPicker.setPromptText("Last modified date (DD.MM.YY)");
+
+        CheckBox creationDateTime_CheckBox = new CheckBox("Creation Date-time");
+        creationDateTime_CheckBox.setOnAction(eventCheckBox ->
+        {
+            if (creationDateTime_CheckBox.isSelected())
+            {
+                //creationTime_CheckBox.setText("");
+                creationTime_HBox.getChildren().add(creationTime_DataPicker);
+            }
+            else
+            {
+                //creationTime_CheckBox.setText("Creation time");
+                creationTime_HBox.getChildren().remove(creationTime_DataPicker);
+            }
+        });
+
+        CheckBox lastModifiedData_CheckBox = new CheckBox("Last modified Date-time");
+        lastModifiedData_CheckBox.setOnAction(eventCheckBox ->
+        {
+            if (lastModifiedData_CheckBox.isSelected())
+            {
+                //creationTime_CheckBox.setText("");
+                lastModifiedDate_HBox.getChildren().add(lastModified_DataPicker);
+            }
+            else
+            {
+                //creationTime_CheckBox.setText("Creation time");
+                lastModifiedDate_HBox.getChildren().remove(lastModified_DataPicker);
+            }
+        });
+
+
+        creationTime_HBox.getChildren().add(creationDateTime_CheckBox);
+        lastModifiedDate_HBox.getChildren().add(lastModifiedData_CheckBox);
+
+        accordionContent_VBox.getChildren().addAll(creationTime_HBox, lastModifiedDate_HBox);
+
+        fileProperties_VBox.getChildren().addAll(fileName_TextField, fileAlreadyExists_Label,
+                accordion);
+
+        confirmOperationDialog.setTitle("Create Directory");
+        confirmOperationDialog.setHeaderText("Create Directory");
+        confirmOperationDialog.setHeaderColor(Color.GOLDENROD);
+        confirmOperationDialog.setMessageText("Enter a name of directory below.");
+        confirmOperationDialog.setMessageTextColor(Color.BLACK);
+        confirmOperationDialog.setMessageTextFont(Font.font(Font.getDefault().getName(), FontWeight.BOLD, 13.0D));
+        //confirmOperationDialog.setOperationButtons(ConfirmDialogButtonType.CANCEL, ConfirmDialogButtonType.OK);
+        confirmOperationDialog.setContent(fileProperties_VBox);
+        confirmOperationDialog.setConfirmOperationOnEnterKey(true);
+        confirmOperationDialog.setBackgroundToRootNode(new Background(new BackgroundFill(Color.LIGHTGOLDENRODYELLOW, CornerRadii.EMPTY, Insets.EMPTY)));
+        confirmOperationDialog.setMinHeight(confirmOperationDialog.rem * 18);
+        confirmOperationDialog.setMaxHeight(confirmOperationDialog.rem * 25);
+
+        ObservableList<Node> nodes = confirmOperationDialog.getOperationButtons();
+        for (int k = 0; k < nodes.size(); k++)
+        {
+            ConfirmOperationButton temporaryConfirmOperationButton = (ConfirmOperationButton) nodes.get(k);
+            temporaryConfirmOperationButton.setBackground(Background.EMPTY);
+            temporaryConfirmOperationButton.setBorder(new Border(new BorderStroke(Color.BLACK,
+                    BorderStrokeStyle.SOLID, CornerRadii.EMPTY, BorderStroke.MEDIUM, Insets.EMPTY)));
+        }
+
+        Path resultPath = null;
+        while (true)
+        {
+            confirmOperationDialog.showAndWait();
+            System.out.println("Выбрана кнопка: " + confirmOperationDialog.getActivatedOperationButton().name());
+
+            if (confirmOperationDialog.getActivatedOperationButton() == ConfirmDialogButtonType.OK)
+            {
+                try
+                {
+                    Path targetPath = currentPath.resolve(fileName_TextField.getText());
+                    resultPath = Files.createDirectory(targetPath);
+
+                    if (resultPath != null && Files.exists(resultPath))
+                    {
+                        //-------------------- Редактирование аттрибутов времени
+                        BasicFileAttributes basicFileAttributes = Files.readAttributes(resultPath, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
+
+                        FileTime creationTime = basicFileAttributes.creationTime();
+                        FileTime lastModifiedTime = basicFileAttributes.lastModifiedTime();
+                        FileTime lastAccessTime = basicFileAttributes.lastAccessTime();
+                        if (creationDateTime_CheckBox.isSelected())
+                        {
+                            LocalDateTime temporary = LocalDateTime.of(creationTime_DataPicker.getValue(),
+                                    LocalTime.now());
+                            Instant temporary_Instant = temporary.toInstant(ZoneOffset.UTC);
+                            creationTime = FileTime.from(temporary_Instant);
+
+                            if (temporary_Instant.isAfter(lastModifiedTime.toInstant()))
+                            {
+                                lastModifiedTime = FileTime.from(temporary_Instant);
+                            }
+
+                            if (System.getProperty("os.name").contains("Linux"))
+                            {
+                                lastModifiedTime = creationTime;
+                                lastAccessTime = creationTime;
+                            }
+                        }
+                        if (lastModifiedData_CheckBox.isSelected())
+                        {
+                            Instant lastModifiedTime_Instant = LocalDateTime.of(lastModified_DataPicker.getValue(),
+                                    LocalTime.now()).toInstant(ZoneOffset.UTC);
+                            lastModifiedTime = FileTime.from(lastModifiedTime_Instant);
+
+                            if (lastModifiedTime_Instant.isBefore(creationTime.toInstant()))
+                            {
+                                creationTime = FileTime.from(lastModifiedTime_Instant);
+                            }
+
+                            if (System.getProperty("os.name").contains("Linux"))
+                            {
+                                creationTime = lastModifiedTime;
+                                lastAccessTime = lastModifiedTime;
+                            }
+                        }
+
+                        /*С атрибутами под Linux Manjaro ext4 обнаружена такая
+                         * хрень: изменения атрибутов не применяются, если
+                         * вызывать метод setTime() с разными параметрами времени.
+                         * Другими словами, чтобы метод записал изменения нужно
+                         * чтобы даты создания, редактирования и последнего доступа
+                         * были одинаковыми.*/
+                        Files.getFileAttributeView(resultPath, BasicFileAttributeView.class).setTimes(lastModifiedTime, lastAccessTime, creationTime);
+                        System.out.println("Аттрибуты должны быть записаны записаны.");
+                        addRowToTreeTable(resultPath);
+                        break;
+                    }
+                }
+                catch (FileAlreadyExistsException fileAlreadyExistsException)
+                {
+                    //fileAlreadyExistsException.printStackTrace();
+                    System.out.println("Файл с таким именем уже существует.");
+                    fileAlreadyExists_Label.setVisible(true);
+                }
+//                catch (NoSuchFileException noSuchFileException)
+//                {
+//                    //fileAlreadyExistsException.printStackTrace();
+//                    System.out.println("Обычно эта ошибка означает, что имя недопустимое.");
+//                    break;
+//                }
+                catch (IOException ioException)
+                {
+                    ioException.printStackTrace();
+                }
+            }
+            else if (confirmOperationDialog.getActivatedOperationButton() == ConfirmDialogButtonType.CANCEL)
+            {
+                break;
+            }
+        }
+    }
+
+
+    /**
+     * @deprecated Сомнительная реализация и польза.
+     */
+    private EditableBasicFileAttributes createCustomFileAttributes(boolean hasFile, boolean hasDirectory,
+                                                                   boolean hasOther, boolean hasSymbolicLink,
+                                                                   DatePicker creationData_datePicker)
+    {
+        EditableBasicFileAttributes editableBasicFileAttributes = new EditableBasicFileAttributes();
+        editableBasicFileAttributes.setHasFile(hasFile);
+        editableBasicFileAttributes.setHasDirectory(hasDirectory);
+        editableBasicFileAttributes.setHasOther(hasOther);
+        editableBasicFileAttributes.setHasSymbolicLink(hasSymbolicLink);
+
+        LocalDate localDate = creationData_datePicker.getValue();
+        LocalDateTime creationDateTime = LocalDateTime.of(localDate, LocalTime.now());
+
+        editableBasicFileAttributes.setCreationTime(FileTime.from(creationDateTime.toInstant(ZoneOffset.UTC)));
+        System.out.println("CrationTime: " + editableBasicFileAttributes.creationTime());
+        return editableBasicFileAttributes;
+    }
+
+
+    /**
+     * Добавляет новую строку в таблицу файлов. При этом в объект модели
+     * данных записываются только те данные, для которых отображены соответсвующие
+     * колонки. Сортирование при этом не происходит.
+     */
+    private void addRowToTreeTable(Path targetPath)
+    {
+
+        FileData newFileDate = new FileData(targetPath.getFileName().toString(),
+                -1);
+
+        try
+        {
+            BasicFileAttributes basicFileAttributes = Files.readAttributes(targetPath, BasicFileAttributes.class);
+            newFileDate.setSize(basicFileAttributes.size());
+            newFileDate.setFile(basicFileAttributes.isRegularFile());
+            newFileDate.setSymbolicLink(basicFileAttributes.isSymbolicLink());
+            newFileDate.setDirectory(basicFileAttributes.isDirectory());
+
+            if (creationTimeColumn.isVisible())
+            {
+                newFileDate.setCreationTime(basicFileAttributes.creationTime());
+            }
+            if (lastModifiedTimeColumn.isVisible())
+            {
+                newFileDate.setLastModifiedTime(basicFileAttributes.lastModifiedTime());
+            }
+            if (ownerColumn.isVisible())
+            {
+                newFileDate.setOwner(Files.getOwner(targetPath, LinkOption.NOFOLLOW_LINKS).getName());
+            }
+            rootItem.getChildren().add(new TreeItem<>(newFileDate));
+        }
+        catch (IOException ioException)
+        {
+            ioException.printStackTrace();
+        }
+    }
 }
+

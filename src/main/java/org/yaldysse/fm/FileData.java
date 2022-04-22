@@ -61,7 +61,7 @@ public class FileData
 
     public void setSize(long newSize)
     {
-        if (newSize > 0L)
+        if (newSize >= 0L)
         {
             size = newSize;
         }

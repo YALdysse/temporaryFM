@@ -22,7 +22,7 @@ public class ConfirmOperationDialog extends Stage
 {
     private Label header_Label;
     private Label text_Label;
-    private final double rem;
+    public final double rem;
     private double preferredWidth;
     private double preferredHeight;
     private ConfirmDialogButtonType activatedOperationButton;
