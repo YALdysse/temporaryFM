@@ -347,17 +347,11 @@ public class FM_GUI extends Application
 
         createFile_MenuItem = new MenuItem("Create file");
         createFile_MenuItem.setAccelerator(new KeyCodeCombination(KeyCode.Y, KeyCombination.CONTROL_DOWN));
-        createFile_MenuItem.setOnAction(event ->
-        {
-            createFile_MenuItem_Action(event);
-        });
+        createFile_MenuItem.setOnAction(this::createFile_MenuItem_Action);
 
         createDirectory_MenuItem = new MenuItem("Create directory");
         createDirectory_MenuItem.setAccelerator(new KeyCodeCombination(KeyCode.N, KeyCombination.CONTROL_DOWN));
-        createDirectory_MenuItem.setOnAction(event ->
-        {
-            createDirectory_MenuItem_Action(event);
-        });
+        createDirectory_MenuItem.setOnAction(this::createDirectory_MenuItem_Action);
 
         edit_Menu.getItems().addAll(createFile_MenuItem, createDirectory_MenuItem,
                 new SeparatorMenuItem(), rename_MenuItem, delete_MenuItem);
@@ -373,32 +367,60 @@ public class FM_GUI extends Application
         nameColumn = new CustomTreeTableColumn<>("Name");
         nameColumn.setMinWidth(preferredWidth * 0.1D);
         nameColumn.setSortable(false);
-        nameColumn.setMaxWidth(Integer.MAX_VALUE * 0.5);
+        //nameColumn.setMaxWidth(Integer.MAX_VALUE * 0.5);
 
         sizeColumn = new CustomTreeTableColumn<>("Size");
         sizeColumn.setMinWidth(preferredWidth * 0.05D);
         sizeColumn.setSortable(false);
-        sizeColumn.setMaxWidth(Integer.MAX_VALUE * 0.3);
+        //sizeColumn.setMaxWidth(Integer.MAX_VALUE * 0.3);
 
         ownerColumn = new CustomTreeTableColumn<>("Owner");
         ownerColumn.setMinWidth(preferredWidth * 0.1D);
         ownerColumn.setSortable(false);
         ownerColumn.setVisible(false);
+        ownerColumn.visibleProperty().addListener(event ->
+        {
+            if(ownerColumn.isVisible())
+            {
+                goToPath(currentPath);
+            }
+        });
 
         lastModifiedTimeColumn = new CustomTreeTableColumn<>("Last modified time");
         lastModifiedTimeColumn.setMinWidth(preferredWidth * 0.1D);
         lastModifiedTimeColumn.setSortable(false);
         lastModifiedTimeColumn.setVisible(false);
+        lastModifiedTimeColumn.visibleProperty().addListener(event ->
+        {
+            if(lastModifiedTimeColumn.isVisible())
+            {
+                goToPath(currentPath);
+            }
+        });
 
         creationTimeColumn = new CustomTreeTableColumn<>("Creation time");
         creationTimeColumn.setMinWidth(preferredWidth * 0.1D);
         creationTimeColumn.setSortable(false);
         creationTimeColumn.setVisible(false);
+        creationTimeColumn.visibleProperty().addListener(event ->
+        {
+            if(creationTimeColumn.isVisible())
+            {
+                goToPath(currentPath);
+            }
+        });
 
         typeColumn = new CustomTreeTableColumn<>("Type");
         typeColumn.setMinWidth(preferredWidth * 0.1D);
         typeColumn.setSortable(false);
-        typeColumn.setMaxWidth(Integer.MAX_VALUE * 0.2);
+        //typeColumn.setMaxWidth(Integer.MAX_VALUE * 0.2);
+        typeColumn.visibleProperty().addListener(event ->
+        {
+            if(typeColumn.isVisible())
+            {
+                goToPath(currentPath);
+            }
+        });
 
 
         nameColumn.setCellValueFactory((TreeTableColumn.CellDataFeatures<FileData, String> param) ->
@@ -679,25 +701,25 @@ public class FM_GUI extends Application
                 goToPath(Paths.get(content_TreeTableView.getSelectionModel().getSelectedItem().getValue().getName()));
             }
         }
-        if (event.getCode() == KeyCode.F2)
-        {
-            System.out.println("pizdes");
-            FileTime time = FileTime.fromMillis(35883295833L);
-            try
-            {
-                Path path = currentPath.resolve(content_TreeTableView.getSelectionModel().getSelectedItem()
-                        .getValue().getName());
-                FileTime timeFile = Files.readAttributes(currentPath.resolve(".dir_colors"), BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS).creationTime();
-                System.out.println(timeFile);
-                Files.getFileAttributeView(path, BasicFileAttributeView.class).setTimes(time, time, time);
-                System.out.println("Атрибуты должны быть установлеы.");
-            }
-            catch (IOException ioException)
-            {
-                ioException.printStackTrace();
-            }
-
-        }
+//        if (event.getCode() == KeyCode.F2)
+//        {
+//            System.out.println("pizdes");
+//            FileTime time = FileTime.fromMillis(35883295833L);
+//            try
+//            {
+//                Path path = currentPath.resolve(content_TreeTableView.getSelectionModel().getSelectedItem()
+//                        .getValue().getName());
+//                FileTime timeFile = Files.readAttributes(currentPath.resolve(".dir_colors"), BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS).creationTime();
+//                System.out.println(timeFile);
+//                Files.getFileAttributeView(path, BasicFileAttributeView.class).setTimes(time, time, time);
+//                System.out.println("Атрибуты должны быть установлеы.");
+//            }
+//            catch (IOException ioException)
+//            {
+//                ioException.printStackTrace();
+//            }
+//
+//        }
 //        else if(event.getCode() == KeyCode.HOME)
 //        {
 //            System.out.println("Запрос на авторазмер....");
