@@ -3,7 +3,6 @@ package org.yaldysse.fm;
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
 import javafx.application.Application;
-import javafx.beans.property.Property;
 import javafx.beans.property.ReadOnlyObjectWrapper;
 import javafx.beans.property.ReadOnlyStringWrapper;
 import javafx.collections.ObservableList;
@@ -11,18 +10,13 @@ import javafx.event.ActionEvent;
 import javafx.event.EventHandler;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
-import javafx.scene.Cursor;
 import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
-import javafx.scene.control.cell.CheckBoxTreeTableCell;
 import javafx.scene.control.skin.TableColumnHeader;
 import javafx.scene.input.*;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
-import javafx.scene.paint.CycleMethod;
-import javafx.scene.paint.LinearGradient;
-import javafx.scene.paint.Stop;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.scene.text.Text;
@@ -31,21 +25,12 @@ import javafx.stage.Stage;
 import javafx.stage.StageStyle;
 import javafx.util.Callback;
 import javafx.util.Duration;
-
-import javax.swing.*;
-import javax.xml.stream.XMLOutputFactory;
-import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.*;
 import java.nio.file.attribute.*;
 import java.time.*;
-import java.time.temporal.ChronoField;
-import java.time.temporal.ChronoUnit;
-import java.time.temporal.TemporalAccessor;
 import java.util.*;
-import java.util.concurrent.TimeUnit;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -186,10 +171,7 @@ public class FM_GUI extends Application
         file_Menu.getItems().addAll(copyFileName_MenuItem, copyAbsoluteNamePath_MenuItem, new SeparatorMenuItem(), exit_MenuItem);
 
         goToParent_MenuItem = new MenuItem("Parent directory");
-        goToParent_MenuItem.setOnAction(event ->
-        {
-            goToParentPath(currentPath);
-        });
+        goToParent_MenuItem.setOnAction(event -> goToParentPath(currentPath));
         goToParent_MenuItem.setAccelerator(new KeyCodeCombination(KeyCode.BACK_SPACE, KeyCodeCombination.CONTROL_DOWN));
 
         goToRootDirectories_MenuItem = new MenuItem("Root directories");
@@ -228,50 +210,32 @@ public class FM_GUI extends Application
 
         sortByName_MenuItem = new RadioMenuItem("by Name");
         sortByName_MenuItem.setSelected(true);
-        sortByName_MenuItem.setOnAction(event ->
-        {
-            requestSort(nameColumn);
-        });
+        sortByName_MenuItem.setOnAction(event -> requestSort(nameColumn));
         sortByName_MenuItem.setToggleGroup(sortBy_ToggleGroup);
 
         sortBySize_MenuItem = new RadioMenuItem("by Size");
-        sortBySize_MenuItem.setOnAction(event ->
-        {
-            requestSort(sizeColumn);
-        });
+        sortBySize_MenuItem.setOnAction(event -> requestSort(sizeColumn));
         sortBySize_MenuItem.setToggleGroup(sortBy_ToggleGroup);
 
         sortByType_MenuItem = new RadioMenuItem("by Type");
-        sortByType_MenuItem.setOnAction(event ->
-        {
-            requestSort(typeColumn);
-        });
+        sortByType_MenuItem.setOnAction(event -> requestSort(typeColumn));
         sortByType_MenuItem.setToggleGroup(sortBy_ToggleGroup);
         sortByType_MenuItem.setDisable(true);
 
         sortByOwner_MenuItem = new RadioMenuItem("by Owner");
-        sortByOwner_MenuItem.setOnAction(event ->
-        {
-            requestSort(ownerColumn);
-        });
+        sortByOwner_MenuItem.setOnAction(event -> requestSort(ownerColumn));
         sortByOwner_MenuItem.setToggleGroup(sortBy_ToggleGroup);
         sortByOwner_MenuItem.setDisable(true);
         sortByOwner_MenuItem.disableProperty().bind(ownerColumn.visibleProperty().not());
 
         sortByCreationTime_MenuItem = new RadioMenuItem("by Creation Time");
-        sortByCreationTime_MenuItem.setOnAction(event ->
-        {
-            requestSort(creationTimeColumn);
-        });
+        sortByCreationTime_MenuItem.setOnAction(event -> requestSort(creationTimeColumn));
         sortByCreationTime_MenuItem.setToggleGroup(sortBy_ToggleGroup);
         sortByCreationTime_MenuItem.setDisable(true);
         sortByCreationTime_MenuItem.disableProperty().bind(creationTimeColumn.visibleProperty().not());
 
         sortByLastModifiedTime_MenuItem = new RadioMenuItem("by Last modified Time");
-        sortByLastModifiedTime_MenuItem.setOnAction(event ->
-        {
-            requestSort(lastModifiedTimeColumn);
-        });
+        sortByLastModifiedTime_MenuItem.setOnAction(event -> requestSort(lastModifiedTimeColumn));
         sortByLastModifiedTime_MenuItem.setToggleGroup(sortBy_ToggleGroup);
         sortByLastModifiedTime_MenuItem.setDisable(true);
         sortByLastModifiedTime_MenuItem.disableProperty().bind(lastModifiedTimeColumn.visibleProperty().not());
@@ -295,10 +259,7 @@ public class FM_GUI extends Application
 
         directoriesFirst_MenuItem = new CheckMenuItem("Directories first");
         directoriesFirst_MenuItem.setSelected(true);
-        directoriesFirst_MenuItem.setOnAction(event ->
-        {
-            requestSort(lastActiveSortColumn);
-        });
+        directoriesFirst_MenuItem.setOnAction(event -> requestSort(lastActiveSortColumn));
         directoriesFirst_MenuItem.selectedProperty().addListener(event ->
         {
             if (directoriesFirst_MenuItem.isSelected())
@@ -440,7 +401,7 @@ public class FM_GUI extends Application
         lastModifiedTimeColumn.setCellValueFactory((TreeTableColumn.CellDataFeatures<FileData, String> param) ->
                 new ReadOnlyStringWrapper(param.getValue().getValue().getLastModifiedTime(true)));
         creationTimeColumn.setCellValueFactory((TreeTableColumn.CellDataFeatures<FileData, String> param) ->
-                new ReadOnlyStringWrapper(param.getValue().getValue().getCreationTime(true)));
+                new ReadOnlyStringWrapper(param.getValue().getValue().getCreationTime().toString()));
         typeColumn.setCellValueFactory((TreeTableColumn.CellDataFeatures<FileData, String> param) ->
                 new ReadOnlyStringWrapper(param.getValue().getValue().getType()));
 
@@ -454,10 +415,7 @@ public class FM_GUI extends Application
         content_TreeTableView.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
 
         //Сомнительный подход
-        content_TreeTableView.setOnKeyPressed(event ->
-        {
-            contentKeyPressed_Action(event);
-        });
+        content_TreeTableView.setOnKeyPressed(this::contentKeyPressed_Action);
         content_TreeTableView.getSortOrder().addAll(nameColumn, typeColumn);
         sortType = TreeTableColumn.SortType.ASCENDING;
         lastActiveSortColumn = nameColumn;
@@ -522,14 +480,7 @@ public class FM_GUI extends Application
             CustomTreeTableColumn temporaryColumn = (CustomTreeTableColumn) tableColumnBase;
             System.out.println(temporaryColumn.toString());
 
-            if (temporaryColumn.isAutoFitSizeColumn())
-            {
-                autoSizeColumn_MenuItem.setSelected(true);
-            }
-            else
-            {
-                autoSizeColumn_MenuItem.setSelected(false);
-            }
+            autoSizeColumn_MenuItem.setSelected(temporaryColumn.isAutoFitSizeColumn());
         });
 
         autoSizeColumn_MenuItem = new CheckMenuItem("Auto size");
@@ -1070,10 +1021,18 @@ public class FM_GUI extends Application
                 }
             }
 
-            FileData temporaryData = content_TreeTableView.getSelectionModel().getSelectedItem().getValue();
-            temporaryData = temporaryData.clone();
-            temporaryData.setName(targetPath.getFileName().toString());
-            content_TreeTableView.getSelectionModel().getSelectedItem().setValue(temporaryData);
+            try
+            {
+                FileData temporaryData = content_TreeTableView.getSelectionModel().getSelectedItem().getValue();
+                temporaryData = temporaryData.clone();
+                temporaryData.setName(targetPath.getFileName().toString());
+                content_TreeTableView.getSelectionModel().getSelectedItem().setValue(temporaryData);
+            }
+            catch(CloneNotSupportedException cloneNotSupportedException)
+            {
+                cloneNotSupportedException.printStackTrace();
+            }
+
         }
     }
 

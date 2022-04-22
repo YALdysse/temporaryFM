@@ -1,6 +1,6 @@
 package org.yaldysse.fm;
 
-import java.nio.file.Path;
+import java.io.File;
 import java.nio.file.attribute.FileTime;
 import java.time.temporal.ChronoUnit;
 import java.util.concurrent.TimeUnit;
@@ -11,7 +11,6 @@ import java.util.concurrent.TimeUnit;
 public class FileData
 {
     private String name;
-    private Path path;
     private long size;
     private String owner;
     private FileTime lastModifiedTime;
@@ -52,11 +51,6 @@ public class FileData
     public void setName(String newName)
     {
         name = newName;
-    }
-
-    public void setPath(Path path)
-    {
-        this.path = path;
     }
 
     public void setSize(long newSize)
@@ -114,11 +108,6 @@ public class FileData
         return name;
     }
 
-    public Path getPath()
-    {
-        return path;
-    }
-
     public long getSize()
     {
         return size;
@@ -158,15 +147,6 @@ public class FileData
         return creationTime;
     }
 
-    public String getCreationTime(boolean string)
-    {
-        if (creationTime == null)
-        {
-            return "suka";
-        }
-        return creationTime.toString();
-    }
-
     public String getType()
     {
         if (hasDirectory)
@@ -199,8 +179,10 @@ public class FileData
         return hasSymbolicLink;
     }
 
-    public FileData clone()
+    @Override
+    protected FileData clone() throws CloneNotSupportedException
     {
+        super.clone();
         FileData temporaryFileData = new FileData(getName(),getSize() );
         temporaryFileData.setOwner(getOwner());
         temporaryFileData.setCreationTime(getCreationTime());
