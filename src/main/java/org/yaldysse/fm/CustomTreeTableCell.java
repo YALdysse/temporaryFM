@@ -27,6 +27,7 @@ public class CustomTreeTableCell<Type1, Type2> extends TreeTableCell<Type1, Type
 
     }
 
+
     public void setTextColor(final Color newTextColor)
     {
         if (newTextColor == null)

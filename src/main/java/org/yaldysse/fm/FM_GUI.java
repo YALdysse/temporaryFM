@@ -32,6 +32,7 @@ import javafx.stage.StageStyle;
 import javafx.util.Callback;
 import javafx.util.Duration;
 
+import javax.swing.*;
 import javax.xml.stream.XMLOutputFactory;
 import java.io.BufferedOutputStream;
 import java.io.File;
@@ -107,6 +108,7 @@ public class FM_GUI extends Application
     private MenuItem copyAbsoluteNamePath_MenuItem;
     private MenuItem createFile_MenuItem;
     private MenuItem createDirectory_MenuItem;
+    private ContextMenu contextMenuForFiles;
 
     private CheckMenuItem autoSizeColumn_MenuItem;
 
@@ -143,6 +145,7 @@ public class FM_GUI extends Application
         initializeGeneral();
         initializeMenu();
         initializeContextMenuForColumns();
+        initializeContextMenuForFiles();
 
         confirmOperationDialog = new ConfirmOperationDialog(StageStyle.UTILITY,
                 "");
@@ -333,17 +336,11 @@ public class FM_GUI extends Application
 
         delete_MenuItem = new MenuItem("Delete");
         delete_MenuItem.setAccelerator(new KeyCodeCombination(KeyCode.DELETE));
-        delete_MenuItem.setOnAction(event ->
-        {
-            delete_MenuItem_Action();
-        });
+        delete_MenuItem.setOnAction(this::delete_MenuItem_Action);
 
         rename_MenuItem = new MenuItem("Rename");
         rename_MenuItem.setAccelerator(new KeyCodeCombination(KeyCode.F2));
-        rename_MenuItem.setOnAction(event ->
-        {
-            rename_MenuItem_Action();
-        });
+        rename_MenuItem.setOnAction(this::rename_MenuItem_Action);
 
         createFile_MenuItem = new MenuItem("Create file");
         createFile_MenuItem.setAccelerator(new KeyCodeCombination(KeyCode.Y, KeyCombination.CONTROL_DOWN));
@@ -380,7 +377,7 @@ public class FM_GUI extends Application
         ownerColumn.setVisible(false);
         ownerColumn.visibleProperty().addListener(event ->
         {
-            if(ownerColumn.isVisible())
+            if (ownerColumn.isVisible())
             {
                 goToPath(currentPath);
             }
@@ -392,7 +389,7 @@ public class FM_GUI extends Application
         lastModifiedTimeColumn.setVisible(false);
         lastModifiedTimeColumn.visibleProperty().addListener(event ->
         {
-            if(lastModifiedTimeColumn.isVisible())
+            if (lastModifiedTimeColumn.isVisible())
             {
                 goToPath(currentPath);
             }
@@ -404,7 +401,7 @@ public class FM_GUI extends Application
         creationTimeColumn.setVisible(false);
         creationTimeColumn.visibleProperty().addListener(event ->
         {
-            if(creationTimeColumn.isVisible())
+            if (creationTimeColumn.isVisible())
             {
                 goToPath(currentPath);
             }
@@ -416,7 +413,7 @@ public class FM_GUI extends Application
         //typeColumn.setMaxWidth(Integer.MAX_VALUE * 0.2);
         typeColumn.visibleProperty().addListener(event ->
         {
-            if(typeColumn.isVisible())
+            if (typeColumn.isVisible())
             {
                 goToPath(currentPath);
             }
@@ -470,10 +467,12 @@ public class FM_GUI extends Application
             public TreeTableCell<FileData, String> call(TreeTableColumn<FileData, String> fileDataStringTreeTableColumn)
             {
                 CustomTreeTableCell<FileData, String> temporaryCell = new CustomTreeTableCell<>();
-                //temporaryCell.setTextFill(Color.RED);
+                //temporaryCell.setTextFill(Color.LIGHTSKYBLUE);
                 temporaryCell.setOnMouseClicked(mouseClickEvent);
                 return temporaryCell;
             }
+
+
         });
         //nameColumn.setAutoFitColumnWidthToData(true);
 
@@ -532,6 +531,28 @@ public class FM_GUI extends Application
         creationTimeColumn.setContextMenu(contextMenuForColums);
         lastModifiedTimeColumn.setContextMenu(contextMenuForColums);
         typeColumn.setContextMenu(contextMenuForColums);
+    }
+
+    private void initializeContextMenuForFiles()
+    {
+        contextMenuForFiles = new ContextMenu();
+
+        /*Нужно создавать новые обьекты. Старые не отображаются.*/
+        MenuItem createFile_contextMenuForFilesItem = new MenuItem("Create File");
+        createFile_contextMenuForFilesItem.setOnAction(this::createFile_MenuItem_Action);
+        MenuItem createDirectory_contextMenuForFilesItem = new MenuItem("Create Directory");
+        createDirectory_contextMenuForFilesItem.setOnAction(this::createDirectory_MenuItem_Action);
+
+        MenuItem renameFile_contextMenuForFilesItem = new MenuItem("Rename");
+        renameFile_contextMenuForFilesItem.setOnAction(this::rename_MenuItem_Action);
+        MenuItem deleteFile_contextMenuForFilesItem = new MenuItem("Delete");
+        deleteFile_contextMenuForFilesItem.setOnAction(this::delete_MenuItem_Action);
+
+        contextMenuForFiles.getItems().addAll(createFile_contextMenuForFilesItem,
+                createDirectory_contextMenuForFilesItem, new SeparatorMenuItem(), renameFile_contextMenuForFilesItem,
+                deleteFile_contextMenuForFilesItem);
+
+        content_TreeTableView.setContextMenu(contextMenuForFiles);
     }
 
     private void contextMenuForColumns_Action(ActionEvent event)
@@ -732,7 +753,8 @@ public class FM_GUI extends Application
      */
     private void cellMouseClicked_Action(MouseEvent event)
     {
-        if (event.getClickCount() == 2)
+        if (event.getButton() == MouseButton.PRIMARY &&
+                event.getClickCount() == 2)
         {
             if (currentPath != null)
             {
@@ -824,7 +846,7 @@ public class FM_GUI extends Application
     /**
      * @deprecated Не оптимизирован.
      */
-    private void delete_MenuItem_Action()
+    private void delete_MenuItem_Action(ActionEvent eventDelete)
     {
         System.out.println("Запрос на удаление");
 
@@ -936,7 +958,7 @@ public class FM_GUI extends Application
     /**
      * Пока, только для одиночного переименования
      */
-    private void rename_MenuItem_Action()
+    private void rename_MenuItem_Action(ActionEvent event)
     {
         System.out.println("Запрос на переименования");
 
@@ -955,7 +977,7 @@ public class FM_GUI extends Application
 
         TextField fileName_TextField = new TextField();
         fileName_TextField.setPromptText("Enter new name here");
-        fileName_TextField.setOnKeyPressed(event ->
+        fileName_TextField.setOnKeyPressed(eventFileName ->
         {
             if (fileAlreadyExists_Label != null)
             {
