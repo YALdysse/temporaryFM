@@ -199,10 +199,11 @@ public class ConfirmOperationDialog extends Stage
     }
 
     /**
-     * Позволяет задать кнопки выбора действия.
+     * Позволяет задать кнопки выбора действия, заменяя уже существующие.
      */
     public void setOperationButtons(ConfirmDialogButtonType... buttons)
     {
+        operationButtons_HBox.getChildren().clear();
         ConfirmOperationButton temporaryButton = null;
         for (ConfirmDialogButtonType temporaryConfirmButtonType : buttons)
         {
@@ -274,5 +275,5 @@ public class ConfirmOperationDialog extends Stage
 
 enum ConfirmDialogButtonType
 {
-    CANCEL, OK;
+    CANCEL, OK, REPLACE_FILE, SKIP, UNITE;
 }
