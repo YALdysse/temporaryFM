@@ -64,6 +64,7 @@ public class FM_GUI extends Application
     private Path currentPath;
     private TreeTableColumn.SortType sortType;
     private CustomTreeTableColumn<FileData, ?> lastActiveSortColumn;
+    private boolean filesToMoveFromClipboard = false;
 
     private MenuBar menu_Bar;
     private Menu file_Menu;
@@ -96,6 +97,7 @@ public class FM_GUI extends Application
     private MenuItem createDirectory_MenuItem;
     private MenuItem copy_MenuItem;
     private MenuItem paste_MenuItem;
+    private MenuItem move_MenuItem;
     private ContextMenu contextMenuForFiles;
 
     private CheckMenuItem autoSizeColumn_MenuItem;
@@ -308,15 +310,27 @@ public class FM_GUI extends Application
 
         copy_MenuItem = new MenuItem("Copy");
         copy_MenuItem.setAccelerator(new KeyCodeCombination(KeyCode.C, KeyCombination.CONTROL_DOWN));
-        copy_MenuItem.setOnAction(this::copyFilesToClipboard_MenuItem_Action);
+        copy_MenuItem.setOnAction(event ->
+        {
+            copyFilesToClipboard_MenuItem_Action(event);
+            filesToMoveFromClipboard=false;
+        });
 
         paste_MenuItem = new MenuItem("Paste");
         paste_MenuItem.setAccelerator(new KeyCodeCombination(KeyCode.V, KeyCombination.CONTROL_DOWN));
         paste_MenuItem.setOnAction(this::pasteFiles_MenuItem_Action);
 
+        move_MenuItem = new MenuItem("Move");
+        move_MenuItem.setAccelerator(new KeyCodeCombination(KeyCode.X,KeyCombination.CONTROL_DOWN));
+        move_MenuItem.setOnAction(event ->
+        {
+            copyFilesToClipboard_MenuItem_Action(event);
+            filesToMoveFromClipboard=true;
+        });
+
         edit_Menu.getItems().addAll(createFile_MenuItem, createDirectory_MenuItem,
-                new SeparatorMenuItem(), copy_MenuItem, paste_MenuItem, new SeparatorMenuItem(),
-                rename_MenuItem, delete_MenuItem);
+                new SeparatorMenuItem(), copy_MenuItem, move_MenuItem, paste_MenuItem,
+                new SeparatorMenuItem(), rename_MenuItem, delete_MenuItem);
 
         menu_Bar = new MenuBar(file_Menu, edit_Menu, goTo_Menu, sortBy_Menu);
 
@@ -496,6 +510,13 @@ public class FM_GUI extends Application
         MenuItem copyFileToClipboard_contextMenuForFilesItem = new MenuItem("Copy");
         copyFileToClipboard_contextMenuForFilesItem.setOnAction(this::copyFilesToClipboard_MenuItem_Action);
 
+        MenuItem moveFilesToClipboard_contextMenuForFilesItem = new MenuItem("Move");
+        moveFilesToClipboard_contextMenuForFilesItem.setOnAction(event ->
+        {
+            copyFilesToClipboard_MenuItem_Action(event);
+            filesToMoveFromClipboard=true;
+        });
+
         MenuItem pasteFileFromClipboard_contextMenuForFilesItem = new MenuItem("Paste");
         pasteFileFromClipboard_contextMenuForFilesItem.setOnAction(this::pasteFiles_MenuItem_Action);
 
@@ -507,7 +528,7 @@ public class FM_GUI extends Application
 
         contextMenuForFiles.getItems().addAll(createFile_contextMenuForFilesItem,
                 createDirectory_contextMenuForFilesItem, new SeparatorMenuItem(), copyFileToClipboard_contextMenuForFilesItem,
-                pasteFileFromClipboard_contextMenuForFilesItem,
+                moveFilesToClipboard_contextMenuForFilesItem,pasteFileFromClipboard_contextMenuForFilesItem,
                 renameFile_contextMenuForFilesItem,
                 deleteFile_contextMenuForFilesItem);
 
@@ -1541,6 +1562,10 @@ public class FM_GUI extends Application
                         {
                             System.out.println("Рекурсивное копирование завершено.");
                         }
+                        if(filesToMoveFromClipboard)
+                        {
+                            deleteFileRecursively(temporarySourcePath);
+                        }
 
                         countSuccessfullyCopiedFiles++;
                         uniteDirectories = false;
@@ -1620,7 +1645,13 @@ public class FM_GUI extends Application
                 }
                 if (countSuccessfullyCopiedFiles == filesToPaste_List.size())
                 {
-                    showLittleNotification(stage,"Files have been successfully copied.",3);
+                    String message = "Files have benn successfully copied.";
+                    if(filesToMoveFromClipboard)
+                    {
+                        message = "Files have been successfully moved.";
+                    }
+
+                    showLittleNotification(stage,message,3);
                     goToPath(currentPath);
                     break;
                 }
