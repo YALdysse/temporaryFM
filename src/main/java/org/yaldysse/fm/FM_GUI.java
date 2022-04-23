@@ -23,6 +23,7 @@ import javafx.scene.text.Text;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
+import javafx.stage.Window;
 import javafx.util.Callback;
 import javafx.util.Duration;
 import java.io.File;
@@ -113,13 +114,6 @@ public class FM_GUI extends Application
         scene = new Scene(root);
 
         initializeComponents();
-        FileSystem curfs = FileSystems.getDefault();
-
-        Iterable<Path> iterable = curfs.getRootDirectories();
-        for (Path path : iterable)
-        {
-            addCustomToContentInTable(FIlE_SYSTEMS_PATH, path.toString());
-        }
 
         stage.setScene(scene);
         stage.setMinHeight(preferredHeight);
@@ -142,6 +136,8 @@ public class FM_GUI extends Application
 
         root.getChildren().addAll(menu_BorderPane, content_VBox);
         content_TreeTableView.requestFocus();
+
+        goToDriveList();
     }
 
     private void initializeMenu()
@@ -177,10 +173,7 @@ public class FM_GUI extends Application
         goToRootDirectories_MenuItem = new MenuItem("Root directories");
         goToRootDirectories_MenuItem.setOnAction(event ->
         {
-            for (Path rootPath : FileSystems.getDefault().getRootDirectories())
-            {
-                addCustomToContentInTable(FIlE_SYSTEMS_PATH, rootPath.toString());
-            }
+            goToDriveList();
         });
         goToRootDirectories_MenuItem.setAccelerator(new KeyCodeCombination(KeyCode.SLASH, KeyCodeCombination.ALT_DOWN));
 
@@ -335,13 +328,13 @@ public class FM_GUI extends Application
     {
         nameColumn = new CustomTreeTableColumn<>("Name");
         nameColumn.setMinWidth(preferredWidth * 0.1D);
+        nameColumn.setPrefWidth(preferredWidth*0.5D);
         nameColumn.setSortable(false);
-        //nameColumn.setMaxWidth(Integer.MAX_VALUE * 0.5);
 
         sizeColumn = new CustomTreeTableColumn<>("Size");
         sizeColumn.setMinWidth(preferredWidth * 0.05D);
+        sizeColumn.setPrefWidth(preferredWidth*0.1D);
         sizeColumn.setSortable(false);
-        //sizeColumn.setMaxWidth(Integer.MAX_VALUE * 0.3);
 
         ownerColumn = new CustomTreeTableColumn<>("Owner");
         ownerColumn.setMinWidth(preferredWidth * 0.1D);
@@ -356,7 +349,7 @@ public class FM_GUI extends Application
         });
 
         lastModifiedTimeColumn = new CustomTreeTableColumn<>("Last modified time");
-        lastModifiedTimeColumn.setMinWidth(preferredWidth * 0.1D);
+        lastModifiedTimeColumn.setMinWidth(preferredWidth * 0.15D);
         lastModifiedTimeColumn.setSortable(false);
         lastModifiedTimeColumn.setVisible(false);
         lastModifiedTimeColumn.visibleProperty().addListener(event ->
@@ -368,7 +361,7 @@ public class FM_GUI extends Application
         });
 
         creationTimeColumn = new CustomTreeTableColumn<>("Creation time");
-        creationTimeColumn.setMinWidth(preferredWidth * 0.1D);
+        creationTimeColumn.setMinWidth(preferredWidth * 0.15D);
         creationTimeColumn.setSortable(false);
         creationTimeColumn.setVisible(false);
         creationTimeColumn.visibleProperty().addListener(event ->
@@ -382,7 +375,7 @@ public class FM_GUI extends Application
         typeColumn = new CustomTreeTableColumn<>("Type");
         typeColumn.setMinWidth(preferredWidth * 0.1D);
         typeColumn.setSortable(false);
-        //typeColumn.setMaxWidth(Integer.MAX_VALUE * 0.2);
+        typeColumn.setPrefWidth(preferredWidth*0.15D);
         typeColumn.visibleProperty().addListener(event ->
         {
             if (typeColumn.isVisible())
@@ -421,7 +414,7 @@ public class FM_GUI extends Application
         lastActiveSortColumn = nameColumn;
         content_TreeTableView.setTableMenuButtonVisible(true);
 
-        EventHandler<MouseEvent> mouseClickEvent = new EventHandler<>()
+        EventHandler<MouseEvent> mouseClickEvent = new EventHandler<MouseEvent>()
         {
             @Override
             public void handle(MouseEvent mouseEvent)
@@ -457,11 +450,6 @@ public class FM_GUI extends Application
                 goToPath(newPath);
             }
         });
-
-//        content_TreeTableView.setColumnResizePolicy(TreeTableView.CONSTRAINED_RESIZE_POLICY);
-//        nameColumn.setMaxWidth(1f * Integer.MAX_VALUE * 70); // 50% width
-//        sizeColumn.setMaxWidth(1f * Integer.MAX_VALUE * 30); // 30% width
-        //ageCol.setMaxWidth( 1f * Integer.MAX_VALUE * 20 ); // 20% width
 
         content_VBox = new VBox(rem * 0.45D);
         content_VBox.setPadding(new Insets(rem * 0.15D, rem * 0.7D, rem * 0.7D, rem * 0.7D));
@@ -569,6 +557,10 @@ public class FM_GUI extends Application
             return false;
         }
 
+        if(!content_TreeTableView.isTableMenuButtonVisible())
+        {
+            content_TreeTableView.setTableMenuButtonVisible(true);
+        }
         System.out.println("destination: " + destinationPath);
 
         currentPath_TextField.setText(destinationPath.toAbsolutePath().toString());
@@ -662,12 +654,11 @@ public class FM_GUI extends Application
     }
 
     /**
-     * Позволяет задать свой список элементов в таблице содержимого, при этом
-     * все содержимое очищается.
+     * Позволяет задать свой список элементов в таблице содержимого. Содержимое
+     * при это не очищается.
      */
     private boolean addCustomToContentInTable(String pathName, String... names)
     {
-        rootItem.getChildren().clear();
         for (String currentName : names)
         {
             rootItem.getChildren().add(new TreeItem<>(new FileData(currentName, 4L)));
@@ -1024,7 +1015,7 @@ public class FM_GUI extends Application
             try
             {
                 FileData temporaryData = content_TreeTableView.getSelectionModel().getSelectedItem().getValue();
-                temporaryData = temporaryData.clone();
+                temporaryData = temporaryData.cloneFileData();
                 temporaryData.setName(targetPath.getFileName().toString());
                 content_TreeTableView.getSelectionModel().getSelectedItem().setValue(temporaryData);
             }
@@ -1042,22 +1033,7 @@ public class FM_GUI extends Application
         clipboardContent.putString(content_TreeTableView.getSelectionModel().getSelectedItem().getValue().getName());
         if (Clipboard.getSystemClipboard().setContent(clipboardContent))
         {
-            Tooltip tooltip = new Tooltip("Name of file has been copied.");
-            tooltip.setWrapText(true);
-            tooltip.setHideOnEscape(true);
-            tooltip.setAutoHide(true);
-            tooltip.setFont(Font.font(tooltip.getFont().getName(), FontWeight.BOLD, 12.0D));
-            tooltip.setOnShown(eventToolTip ->
-            {
-                Timeline timeline = new Timeline(new KeyFrame(Duration.seconds(2.0D), eventHide ->
-                {
-                    tooltip.hide();
-                }));
-                timeline.play();
-            });
-            Text temporaryText = new Text(tooltip.getText());
-            tooltip.show(stage, (stage.getX() + stage.getWidth() / 2.0D) -
-                    temporaryText.getBoundsInParent().getWidth() / 2.0D, stage.getY() + stage.getHeight() / 2);
+            showLittleNotification(stage,"Files has been successfully copied to clipboard.",3);
         }
     }
 
@@ -1538,7 +1514,6 @@ public class FM_GUI extends Application
             {
                 Path temporarySourcePath = null;
                 Path temporaryTargetPath = null;
-                boolean replaceFile = false;
                 boolean uniteDirectories = false;
 
                 try
@@ -1547,10 +1522,6 @@ public class FM_GUI extends Application
                     {
                         countSuccessfullyCopiedFiles++;
                         lastActivatedConfirmButtonType = null;
-                    }
-                    else if (lastActivatedConfirmButtonType == ConfirmDialogButtonType.REPLACE_FILE)
-                    {
-                        replaceFile = true;
                     }
                     else if (lastActivatedConfirmButtonType == ConfirmDialogButtonType.UNITE)
                     {
@@ -1565,19 +1536,14 @@ public class FM_GUI extends Application
                         //System.out.println("source: " + temporarySourcePath.toAbsolutePath().toString());
                         //System.out.println("target: " + temporaryTargetPath.toAbsolutePath().toString());
 
-                        if (!uniteDirectories)
+                        if (copyFileRecursively(temporarySourcePath, temporaryTargetPath,
+                                uniteDirectories))
                         {
-                            copyFile(temporarySourcePath, temporaryTargetPath, true, replaceFile);
+                            System.out.println("Рекурсивное копирование завершено.");
                         }
-                        else
-                        {
-                            if (copyFileRecursively(temporarySourcePath, temporaryTargetPath))
-                            {
-                                System.out.println("Рекурсивное копирование завершено.");
-                            }
-                        }
+
                         countSuccessfullyCopiedFiles++;
-                        replaceFile = false;
+                        uniteDirectories = false;
                     }
                 }
                 catch (FileAlreadyExistsException fileAlreadyExistsException)
@@ -1628,7 +1594,7 @@ public class FM_GUI extends Application
                     confirmOperationDialog.setMessageTextFont(Font.font(Font.getDefault().getName(), FontWeight.BOLD, 13.0D));
                     confirmOperationDialog.setOperationButtons(ConfirmDialogButtonType.CANCEL, ConfirmDialogButtonType.UNITE, ConfirmDialogButtonType.SKIP);
                     ConfirmOperationButton confirmButton = (ConfirmOperationButton) confirmOperationDialog.getOperationButtons().get(1);
-                    confirmButton.setText("Replace and unite");
+                    confirmButton.setText("Unite");
                     confirmOperationDialog.setContent(fileName_VBox);
                     confirmOperationDialog.setConfirmOperationOnEnterKey(true);
                     confirmOperationDialog.setBackgroundToRootNode(new Background(new BackgroundFill(Color.LIGHTGREEN, CornerRadii.EMPTY, Insets.EMPTY)));
@@ -1637,7 +1603,7 @@ public class FM_GUI extends Application
                     //=============================================
                     if (lastActivatedConfirmButtonType == ConfirmDialogButtonType.CANCEL)
                     {
-                        System.out.println("Операция отменена");
+                        showLittleNotification(stage,"Copy operation has been stopped.",3);
                         break;
                     }
                 }
@@ -1654,6 +1620,7 @@ public class FM_GUI extends Application
                 }
                 if (countSuccessfullyCopiedFiles == filesToPaste_List.size())
                 {
+                    showLittleNotification(stage,"Files have been successfully copied.",3);
                     goToPath(currentPath);
                     break;
                 }
@@ -1702,36 +1669,13 @@ public class FM_GUI extends Application
         return true;
     }
 
-    private boolean copyFile(Path sourceFilePath, Path targetFilePath,
-                             boolean copyAttributes, boolean copyWithReplacing) throws FileAlreadyExistsException,
-            IOException
-    {
-        if (copyAttributes && copyWithReplacing)
-        {
-            Files.copy(sourceFilePath, targetFilePath,
-                    StandardCopyOption.COPY_ATTRIBUTES,
-                    StandardCopyOption.REPLACE_EXISTING);
-        }
-        else if (copyAttributes)
-        {
-            Files.copy(sourceFilePath, targetFilePath,
-                    StandardCopyOption.COPY_ATTRIBUTES);
-        }
-        else if (copyWithReplacing)
-        {
-            Files.copy(sourceFilePath, targetFilePath,
-                    StandardCopyOption.REPLACE_EXISTING);
-        }
-
-
-        return true;
-    }
 
     /**
      * Копирует файлы из одного места в другое. При обнаружении каталогов с одинаковым
      * именем происходит слияние каталогов. Файлы, имеющие одинаковые имена будут заменены.
      */
-    private boolean copyFileRecursively(Path sourceFilePath, Path targetFilePath) throws IOException
+    private boolean copyFileRecursively(Path sourceFilePath, Path targetFilePath,
+                                        boolean replaceExisting) throws IOException
     {
 
         if (Files.isDirectory(sourceFilePath, LinkOption.NOFOLLOW_LINKS))
@@ -1754,13 +1698,22 @@ public class FM_GUI extends Application
             while (filesInDirectory_Iterator.hasNext())
             {
                 Path temporaryFilePath = filesInDirectory_Iterator.next();
-                copyFileRecursively(temporaryFilePath, targetFilePath.resolve(temporaryFilePath.getFileName()));
+                copyFileRecursively(temporaryFilePath, targetFilePath.resolve(temporaryFilePath.getFileName()),
+                        replaceExisting);
             }
         }
         else
         {
-            Path resultPath = Files.copy(sourceFilePath, targetFilePath, StandardCopyOption.COPY_ATTRIBUTES,
-                    StandardCopyOption.REPLACE_EXISTING);
+            Path resultPath = null;
+            if(replaceExisting)
+            {
+                resultPath = Files.copy(sourceFilePath, targetFilePath, StandardCopyOption.COPY_ATTRIBUTES,
+                        StandardCopyOption.REPLACE_EXISTING);
+            }
+            else
+            {
+                resultPath = Files.copy(sourceFilePath, targetFilePath, StandardCopyOption.COPY_ATTRIBUTES);
+            }
 
             if (resultPath != null)
             {
@@ -1828,23 +1781,52 @@ public class FM_GUI extends Application
         {
             Clipboard.getSystemClipboard().setContent(clipboardContent);
 
-            Tooltip tooltip = new Tooltip("File has been copied to clipboard.");
-            tooltip.setWrapText(true);
-            tooltip.setHideOnEscape(true);
-            tooltip.setAutoHide(true);
-            tooltip.setFont(Font.font(tooltip.getFont().getName(), FontWeight.BOLD, 12.0D));
-            tooltip.setOnShown(eventToolTip ->
-            {
-                Timeline timeline = new Timeline(new KeyFrame(Duration.seconds(2.0D), eventHide ->
-                {
-                    tooltip.hide();
-                }));
-                timeline.play();
-            });
-            Text temporaryText = new Text(tooltip.getText());
-            tooltip.show(stage, (stage.getX() + stage.getWidth() / 2.0D) -
-                    temporaryText.getBoundsInParent().getWidth() / 2.0D, stage.getY() + stage.getHeight() / 2);
+            showLittleNotification(stage,"Files have been successfully copied to clipboard.",3);
         }
+    }
+
+    /**Отображает в таблице файлов разделы жесткого диска (и не только),
+     * при этом предыдущие данные в таблице очищаются.*/
+    private void goToDriveList()
+    {
+        ownerColumn.setVisible(false);
+        creationTimeColumn.setVisible(false);
+        lastModifiedTimeColumn.setVisible(false);
+        content_TreeTableView.setTableMenuButtonVisible(false);
+
+        rootItem.getChildren().clear();
+        Iterable<FileStore> fileStores_Iterable = FileSystems.getDefault().getFileStores();
+        String temporaryFileStorePath = null;
+        for (FileStore temporaryFileStore : fileStores_Iterable)
+        {
+            temporaryFileStorePath = temporaryFileStore.toString();
+            temporaryFileStorePath = temporaryFileStorePath.substring(0,
+                    temporaryFileStorePath.indexOf('(')-1);
+            addCustomToContentInTable(FIlE_SYSTEMS_PATH,temporaryFileStorePath);
+        }
+    }
+
+
+    /**Отображает всплывающую подсказку - небольшое уведомление.*/
+    private void showLittleNotification(Window window, String message, final int DurationInSeconds)
+    {
+        Tooltip tooltip = new Tooltip(message);
+        tooltip.setWrapText(true);
+        tooltip.setHideOnEscape(true);
+        tooltip.setAutoHide(true);
+        tooltip.setFont(Font.font(tooltip.getFont().getName(), FontWeight.BOLD, 12.0D));
+        tooltip.setOnShown(eventToolTip ->
+        {
+            Timeline timeline = new Timeline(new KeyFrame(Duration.seconds(DurationInSeconds), eventHide ->
+            {
+                tooltip.hide();
+                tooltip.setOnShown(null);
+            }));
+            timeline.play();
+        });
+        Text temporaryText = new Text(tooltip.getText());
+        tooltip.show(stage, (stage.getX() + stage.getWidth() / 2.0D) -
+                temporaryText.getBoundsInParent().getWidth() / 2.0D, stage.getY() + stage.getHeight() / 2);
     }
 }
 

@@ -129,6 +129,7 @@ public class FileData
         {
             return -1L;
         }
+
         return lastModifiedTime.to(TimeUnit.of(ChronoUnit.DAYS));
         //return lastModifiedTime.to(timeUnit);
     }
@@ -179,10 +180,9 @@ public class FileData
         return hasSymbolicLink;
     }
 
-    @Override
-    protected FileData clone() throws CloneNotSupportedException
+
+    public FileData cloneFileData() throws CloneNotSupportedException
     {
-        super.clone();
         FileData temporaryFileData = new FileData(getName(),getSize() );
         temporaryFileData.setOwner(getOwner());
         temporaryFileData.setCreationTime(getCreationTime());
