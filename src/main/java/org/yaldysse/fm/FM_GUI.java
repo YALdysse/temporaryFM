@@ -5,8 +5,10 @@ import javafx.animation.Timeline;
 import javafx.application.Application;
 import javafx.beans.property.ReadOnlyObjectWrapper;
 import javafx.beans.property.ReadOnlyStringWrapper;
+import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
 import javafx.event.ActionEvent;
+import javafx.event.Event;
 import javafx.event.EventHandler;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -26,6 +28,8 @@ import javafx.stage.StageStyle;
 import javafx.stage.Window;
 import javafx.util.Callback;
 import javafx.util.Duration;
+
+import javax.swing.plaf.ColorUIResource;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.*;
@@ -36,6 +40,10 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 
+/**
+ * Ошибки: Если открыть новую вкладку, вернуться на предыдууще, перейти в корень, а
+ * потом на следующую вкладку, то будет сгенерировать исключительная ситуация.
+ */
 public class FM_GUI extends Application
 {
     private Stage stage;
@@ -44,27 +52,33 @@ public class FM_GUI extends Application
     private VBox content_VBox;
     private BorderPane menu_BorderPane;
     private TextField currentPath_TextField;
-    private TreeTableView<FileData> content_TreeTableView;
-    private CustomTreeTableColumn<FileData, String> nameColumn;
-    private CustomTreeTableColumn<FileData, Long> sizeColumn;
-    private CustomTreeTableColumn<FileData, String> ownerColumn;
-    private CustomTreeTableColumn<FileData, String> lastModifiedTimeColumn;
-    private CustomTreeTableColumn<FileData, String> creationTimeColumn;
-    private CustomTreeTableColumn<FileData, String> typeColumn;
     private TreeTableCell<FileData, String> treeTableCell;
     private TreeItem<FileData> rootItem;
     private ContextMenu contextMenuForColums;
     private ArrayList<TreeTableColumn> allColumns;
+    private TabPane content_TabPane;
+    private TreeTableView<FileData> activatedTreeTableView;
+    /**
+     * Будет хранить ссылку на столбец с типом для выбранной таблицы
+     */
+    private CustomTreeTableColumn<FileData, String> currentNameColumn;
+    private CustomTreeTableColumn<FileData, Long> currentSizeColumn;
+    private CustomTreeTableColumn<FileData, String> currentTypeColumn;
+    private CustomTreeTableColumn<FileData, String> currentCreationTimeColumn;
+    private CustomTreeTableColumn<FileData, String> currentOwnerColumn;
+    private CustomTreeTableColumn<FileData, String> currentLastModifiedTimeColumn;
 
 
     public static final double rem = new Text("").getBoundsInParent().getHeight();
     private double preferredWidth = rem * 30.0D;
     private double preferredHeight = rem * 20.0D;
     public final String FIlE_SYSTEMS_PATH = "file systems:///";
-    private Path currentPath;
+    //private Path currentPath;
+    private ArrayList<Path> currentPath;
     private TreeTableColumn.SortType sortType;
     private CustomTreeTableColumn<FileData, ?> lastActiveSortColumn;
     private boolean filesToMoveFromClipboard = false;
+    private int currentContentTabIndex;
 
     private MenuBar menu_Bar;
     private Menu file_Menu;
@@ -99,11 +113,20 @@ public class FM_GUI extends Application
     private MenuItem paste_MenuItem;
     private MenuItem move_MenuItem;
     private ContextMenu contextMenuForFiles;
+    private MenuItem createNewTab_MenuItem;
+    private MenuItem goToPreviousTab_MenuItem;
+    private MenuItem goToNextTab_MenuItem;
 
     private CheckMenuItem autoSizeColumn_MenuItem;
 
     private ConfirmOperationDialog confirmOperationDialog;
 
+    public final String TYPE_COLUMN_ID = "TYPE";
+    public final String NAME_COLUMN_ID = "NAME";
+    public final String SIZE_COLUMN_ID = "NAME";
+    public final String OWNER_COLUMN_ID = "OWNER";
+    public final String CREATION_TIME_COLUMN_ID = "CREATION_TIME";
+    public final String LAST_MODIFIED_TIME_COLUMN_ID = "LAST_MODIFIED_TIME";
 
     @Override
     public void start(Stage primaryStage) throws Exception
@@ -137,9 +160,10 @@ public class FM_GUI extends Application
         confirmOperationDialog.initModality(Modality.APPLICATION_MODAL);
 
         root.getChildren().addAll(menu_BorderPane, content_VBox);
-        content_TreeTableView.requestFocus();
+        activatedTreeTableView.requestFocus();
 
         goToDriveList();
+        content_TabPane.getSelectionModel().getSelectedItem().setText(FIlE_SYSTEMS_PATH);
     }
 
     private void initializeMenu()
@@ -165,11 +189,17 @@ public class FM_GUI extends Application
             copyAbsoluteNamePath_MenuItem_Action(event);
         });
 
+        createNewTab_MenuItem = new MenuItem("Create new tab");
+        createNewTab_MenuItem.setAccelerator(new KeyCodeCombination(KeyCode.T, KeyCombination.CONTROL_DOWN));
+        createNewTab_MenuItem.setOnAction(this::createNewTab_Action);
+        createNewTab_MenuItem.setDisable(true);
+
         file_Menu = new Menu("Main");
-        file_Menu.getItems().addAll(copyFileName_MenuItem, copyAbsoluteNamePath_MenuItem, new SeparatorMenuItem(), exit_MenuItem);
+        file_Menu.getItems().addAll(createNewTab_MenuItem, copyFileName_MenuItem, copyAbsoluteNamePath_MenuItem,
+                new SeparatorMenuItem(), exit_MenuItem);
 
         goToParent_MenuItem = new MenuItem("Parent directory");
-        goToParent_MenuItem.setOnAction(event -> goToParentPath(currentPath));
+        goToParent_MenuItem.setOnAction(event -> goToParentPath(currentPath.get(currentContentTabIndex)));
         goToParent_MenuItem.setAccelerator(new KeyCodeCombination(KeyCode.BACK_SPACE, KeyCodeCombination.CONTROL_DOWN));
 
         goToRootDirectories_MenuItem = new MenuItem("Root directories");
@@ -195,45 +225,53 @@ public class FM_GUI extends Application
         });
         goToUserDirectory_MenuItem.setAccelerator(new KeyCodeCombination(KeyCode.U, KeyCodeCombination.ALT_DOWN));
 
+        goToPreviousTab_MenuItem = new MenuItem("Previous tab");
+        goToPreviousTab_MenuItem.setAccelerator(new KeyCodeCombination(KeyCode.PAGE_UP, KeyCombination.CONTROL_DOWN));
+        goToPreviousTab_MenuItem.setOnAction(this::goToPreviousTab_Action);
+
+        goToNextTab_MenuItem = new MenuItem("Next tab");
+        goToNextTab_MenuItem.setAccelerator(new KeyCodeCombination(KeyCode.PAGE_DOWN, KeyCombination.CONTROL_DOWN));
+        goToNextTab_MenuItem.setOnAction(this::goToNextTab_Action);
 
         goTo_Menu = new Menu("Go to...");
         goTo_Menu.getItems().addAll(goToRootDirectories_MenuItem, goToHomeDirectory_MenuItem,
-                goToUserDirectory_MenuItem, goToParent_MenuItem);
+                goToUserDirectory_MenuItem, goToParent_MenuItem, new SeparatorMenuItem(),
+                goToPreviousTab_MenuItem, goToNextTab_MenuItem);
 
         sortBy_ToggleGroup = new ToggleGroup();
         sortType_ToggleGroup = new ToggleGroup();
 
         sortByName_MenuItem = new RadioMenuItem("by Name");
         sortByName_MenuItem.setSelected(true);
-        sortByName_MenuItem.setOnAction(event -> requestSort(nameColumn));
+        sortByName_MenuItem.setOnAction(event -> requestSort(currentNameColumn, currentTypeColumn));
         sortByName_MenuItem.setToggleGroup(sortBy_ToggleGroup);
 
         sortBySize_MenuItem = new RadioMenuItem("by Size");
-        sortBySize_MenuItem.setOnAction(event -> requestSort(sizeColumn));
+        sortBySize_MenuItem.setOnAction(event -> requestSort(currentSizeColumn, currentTypeColumn));
         sortBySize_MenuItem.setToggleGroup(sortBy_ToggleGroup);
 
         sortByType_MenuItem = new RadioMenuItem("by Type");
-        sortByType_MenuItem.setOnAction(event -> requestSort(typeColumn));
+        sortByType_MenuItem.setOnAction(event -> requestSort(currentTypeColumn, currentTypeColumn));
         sortByType_MenuItem.setToggleGroup(sortBy_ToggleGroup);
         sortByType_MenuItem.setDisable(true);
 
         sortByOwner_MenuItem = new RadioMenuItem("by Owner");
-        sortByOwner_MenuItem.setOnAction(event -> requestSort(ownerColumn));
+        sortByOwner_MenuItem.setOnAction(event -> requestSort(currentOwnerColumn, currentTypeColumn));
         sortByOwner_MenuItem.setToggleGroup(sortBy_ToggleGroup);
         sortByOwner_MenuItem.setDisable(true);
-        sortByOwner_MenuItem.disableProperty().bind(ownerColumn.visibleProperty().not());
+        sortByOwner_MenuItem.disableProperty().bind(currentOwnerColumn.visibleProperty().not());
 
         sortByCreationTime_MenuItem = new RadioMenuItem("by Creation Time");
-        sortByCreationTime_MenuItem.setOnAction(event -> requestSort(creationTimeColumn));
+        sortByCreationTime_MenuItem.setOnAction(event -> requestSort(currentCreationTimeColumn, currentTypeColumn));
         sortByCreationTime_MenuItem.setToggleGroup(sortBy_ToggleGroup);
         sortByCreationTime_MenuItem.setDisable(true);
-        sortByCreationTime_MenuItem.disableProperty().bind(creationTimeColumn.visibleProperty().not());
+        sortByCreationTime_MenuItem.disableProperty().bind(currentCreationTimeColumn.visibleProperty().not());
 
         sortByLastModifiedTime_MenuItem = new RadioMenuItem("by Last modified Time");
-        sortByLastModifiedTime_MenuItem.setOnAction(event -> requestSort(lastModifiedTimeColumn));
+        sortByLastModifiedTime_MenuItem.setOnAction(event -> requestSort(currentLastModifiedTimeColumn, currentTypeColumn));
         sortByLastModifiedTime_MenuItem.setToggleGroup(sortBy_ToggleGroup);
         sortByLastModifiedTime_MenuItem.setDisable(true);
-        sortByLastModifiedTime_MenuItem.disableProperty().bind(lastModifiedTimeColumn.visibleProperty().not());
+        sortByLastModifiedTime_MenuItem.disableProperty().bind(currentLastModifiedTimeColumn.visibleProperty().not());
 
         ascendingSortType_MenuItem = new RadioMenuItem("Ascending");
         ascendingSortType_MenuItem.setToggleGroup(sortType_ToggleGroup);
@@ -241,7 +279,7 @@ public class FM_GUI extends Application
         ascendingSortType_MenuItem.setOnAction(event ->
         {
             sortType = TreeTableColumn.SortType.ASCENDING;
-            requestSort(lastActiveSortColumn);
+            requestSort(lastActiveSortColumn, currentTypeColumn);
         });
 
         descendingSortType_MenuItem = new RadioMenuItem("Descending");
@@ -249,12 +287,13 @@ public class FM_GUI extends Application
         descendingSortType_MenuItem.setOnAction(event ->
         {
             sortType = TreeTableColumn.SortType.DESCENDING;
-            requestSort(lastActiveSortColumn);
+            requestSort(lastActiveSortColumn, currentTypeColumn);
         });
 
         directoriesFirst_MenuItem = new CheckMenuItem("Directories first");
         directoriesFirst_MenuItem.setSelected(true);
-        directoriesFirst_MenuItem.setOnAction(event -> requestSort(lastActiveSortColumn));
+        directoriesFirst_MenuItem.setOnAction(event -> requestSort(lastActiveSortColumn,
+                currentTypeColumn));
         directoriesFirst_MenuItem.selectedProperty().addListener(event ->
         {
             if (directoriesFirst_MenuItem.isSelected())
@@ -313,7 +352,7 @@ public class FM_GUI extends Application
         copy_MenuItem.setOnAction(event ->
         {
             copyFilesToClipboard_MenuItem_Action(event);
-            filesToMoveFromClipboard=false;
+            filesToMoveFromClipboard = false;
         });
 
         paste_MenuItem = new MenuItem("Paste");
@@ -321,11 +360,11 @@ public class FM_GUI extends Application
         paste_MenuItem.setOnAction(this::pasteFiles_MenuItem_Action);
 
         move_MenuItem = new MenuItem("Move");
-        move_MenuItem.setAccelerator(new KeyCodeCombination(KeyCode.X,KeyCombination.CONTROL_DOWN));
+        move_MenuItem.setAccelerator(new KeyCodeCombination(KeyCode.X, KeyCombination.CONTROL_DOWN));
         move_MenuItem.setOnAction(event ->
         {
             copyFilesToClipboard_MenuItem_Action(event);
-            filesToMoveFromClipboard=true;
+            filesToMoveFromClipboard = true;
         });
 
         edit_Menu.getItems().addAll(createFile_MenuItem, createDirectory_MenuItem,
@@ -340,61 +379,94 @@ public class FM_GUI extends Application
 
     private void initializeGeneral()
     {
-        nameColumn = new CustomTreeTableColumn<>("Name");
+        CustomTreeTableColumn<FileData, String> nameColumn = new CustomTreeTableColumn<>("Name");
         nameColumn.setMinWidth(preferredWidth * 0.1D);
-        nameColumn.setPrefWidth(preferredWidth*0.5D);
+        nameColumn.setPrefWidth(preferredWidth * 0.5D);
         nameColumn.setSortable(false);
+        nameColumn.setId(NAME_COLUMN_ID);
 
-        sizeColumn = new CustomTreeTableColumn<>("Size");
+        CustomTreeTableColumn<FileData, Long> sizeColumn = new CustomTreeTableColumn<>("Size");
         sizeColumn.setMinWidth(preferredWidth * 0.05D);
-        sizeColumn.setPrefWidth(preferredWidth*0.1D);
+        sizeColumn.setPrefWidth(preferredWidth * 0.1D);
         sizeColumn.setSortable(false);
+        sizeColumn.setId(SIZE_COLUMN_ID);
 
-        ownerColumn = new CustomTreeTableColumn<>("Owner");
+        CustomTreeTableColumn<FileData, String> ownerColumn = new CustomTreeTableColumn<>("Owner");
         ownerColumn.setMinWidth(preferredWidth * 0.1D);
         ownerColumn.setSortable(false);
         ownerColumn.setVisible(false);
+        ownerColumn.setId(OWNER_COLUMN_ID);
         ownerColumn.visibleProperty().addListener(event ->
         {
             if (ownerColumn.isVisible())
             {
-                goToPath(currentPath);
+                goToPath(currentPath.get(currentContentTabIndex));
+            }
+            else
+            {
+                if (sortByOwner_MenuItem.isSelected())
+                {
+                    sortByName_MenuItem.setSelected(true);
+                    lastActiveSortColumn = currentNameColumn;
+                }
+                sortByOwner_MenuItem.setSelected(false);
             }
         });
 
-        lastModifiedTimeColumn = new CustomTreeTableColumn<>("Last modified time");
+        CustomTreeTableColumn<FileData, String> lastModifiedTimeColumn = new CustomTreeTableColumn<>("Last modified time");
         lastModifiedTimeColumn.setMinWidth(preferredWidth * 0.15D);
         lastModifiedTimeColumn.setSortable(false);
         lastModifiedTimeColumn.setVisible(false);
+        lastModifiedTimeColumn.setId(LAST_MODIFIED_TIME_COLUMN_ID);
         lastModifiedTimeColumn.visibleProperty().addListener(event ->
         {
             if (lastModifiedTimeColumn.isVisible())
             {
-                goToPath(currentPath);
+                goToPath(currentPath.get(currentContentTabIndex));
+            }
+            else
+            {
+                if (sortByLastModifiedTime_MenuItem.isSelected())
+                {
+                    sortByName_MenuItem.setSelected(true);
+                    lastActiveSortColumn = currentNameColumn;
+                }
+                sortByLastModifiedTime_MenuItem.setSelected(false);
             }
         });
 
-        creationTimeColumn = new CustomTreeTableColumn<>("Creation time");
+        CustomTreeTableColumn<FileData, String> creationTimeColumn = new CustomTreeTableColumn<>("Creation time");
         creationTimeColumn.setMinWidth(preferredWidth * 0.15D);
         creationTimeColumn.setSortable(false);
         creationTimeColumn.setVisible(false);
+        creationTimeColumn.setId(CREATION_TIME_COLUMN_ID);
         creationTimeColumn.visibleProperty().addListener(event ->
         {
             if (creationTimeColumn.isVisible())
             {
-                goToPath(currentPath);
+                goToPath(currentPath.get(currentContentTabIndex));
+            }
+            else
+            {
+                if (sortByCreationTime_MenuItem.isSelected())
+                {
+                    sortByName_MenuItem.setSelected(true);
+                    lastActiveSortColumn = currentNameColumn;
+                }
+                sortByCreationTime_MenuItem.setSelected(false);
             }
         });
 
-        typeColumn = new CustomTreeTableColumn<>("Type");
+        CustomTreeTableColumn<FileData, String> typeColumn = new CustomTreeTableColumn<>("Type");
         typeColumn.setMinWidth(preferredWidth * 0.1D);
         typeColumn.setSortable(false);
-        typeColumn.setPrefWidth(preferredWidth*0.15D);
+        typeColumn.setPrefWidth(preferredWidth * 0.15D);
+        typeColumn.setId(TYPE_COLUMN_ID);
         typeColumn.visibleProperty().addListener(event ->
         {
             if (typeColumn.isVisible())
             {
-                goToPath(currentPath);
+                goToPath(currentPath.get(currentContentTabIndex));
             }
         });
 
@@ -408,21 +480,38 @@ public class FM_GUI extends Application
         lastModifiedTimeColumn.setCellValueFactory((TreeTableColumn.CellDataFeatures<FileData, String> param) ->
                 new ReadOnlyStringWrapper(param.getValue().getValue().getLastModifiedTime(true)));
         creationTimeColumn.setCellValueFactory((TreeTableColumn.CellDataFeatures<FileData, String> param) ->
-                new ReadOnlyStringWrapper(param.getValue().getValue().getCreationTime().toString()));
+                new ReadOnlyStringWrapper(param.getValue().getValue().getCreationTime(true)));
         typeColumn.setCellValueFactory((TreeTableColumn.CellDataFeatures<FileData, String> param) ->
                 new ReadOnlyStringWrapper(param.getValue().getValue().getType()));
 
         rootItem = new TreeItem<>(new FileData("root", 4096L));
 
-        content_TreeTableView = new TreeTableView<>();
+        TreeTableView<FileData> content_TreeTableView = new TreeTableView<>();
+
+        /*Сделяно, чтобы F2 захватывалась в таблице файлов. Потенциально опасно -
+         * иногда приводит к ошибкам JRE!!!*/
+//        content_TreeTableView.addEventHandler(KeyEvent.KEY_RELEASED, new EventHandler<KeyEvent>()
+//        {
+//            @Override
+//            public void handle(KeyEvent keyEvent)
+//            {
+//                if(keyEvent.getCode() == KeyCode.F2)
+//                {
+//                    Runnable r = scene.getAccelerators().get(rename_MenuItem.getAccelerator());
+//                    if (r != null)
+//                    {
+//                        r.run();
+//                    }
+//                }
+//            }
+//        });
+
         content_TreeTableView.getColumns().addAll(nameColumn, typeColumn, sizeColumn, ownerColumn,
                 creationTimeColumn, lastModifiedTimeColumn);
         content_TreeTableView.setRoot(rootItem);
         content_TreeTableView.setShowRoot(false);
         content_TreeTableView.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
-
-        //Сомнительный подход
-        content_TreeTableView.setOnKeyPressed(this::contentKeyPressed_Action);
+        content_TreeTableView.setOnKeyReleased(this::contentKeyPressed_Action);
         content_TreeTableView.getSortOrder().addAll(nameColumn, typeColumn);
         sortType = TreeTableColumn.SortType.ASCENDING;
         lastActiveSortColumn = nameColumn;
@@ -447,13 +536,11 @@ public class FM_GUI extends Application
                 temporaryCell.setOnMouseClicked(mouseClickEvent);
                 return temporaryCell;
             }
-
-
         });
         //nameColumn.setAutoFitColumnWidthToData(true);
 
         currentPath_TextField = new TextField();
-        currentPath_TextField.setOnKeyPressed(event ->
+        currentPath_TextField.setOnKeyReleased(event ->
         {
             if (event.getCode() == KeyCode.ENTER)
             {
@@ -465,9 +552,46 @@ public class FM_GUI extends Application
             }
         });
 
+        Tab main_Tab = new Tab();
+        main_Tab.setContent(content_TreeTableView);
+        main_Tab.setClosable(false);
+
+        currentContentTabIndex = 0;
+
+        content_TabPane = new TabPane(main_Tab);
+        content_TabPane.getSelectionModel().selectedItemProperty().addListener(event ->
+        {
+            System.out.println("Вкладка изменена. Текущий индекс: "
+                    + content_TabPane.getSelectionModel().getSelectedIndex());
+            currentContentTabIndex = content_TabPane.getSelectionModel().getSelectedIndex();
+
+            activatedTreeTableView = (TreeTableView<FileData>) content_TabPane.getSelectionModel().getSelectedItem().getContent();
+            currentNameColumn = findColumnByStringID(NAME_COLUMN_ID);
+            currentTypeColumn = findColumnByStringID(TYPE_COLUMN_ID);
+            currentOwnerColumn = findColumnByStringID(OWNER_COLUMN_ID);
+            currentCreationTimeColumn = findColumnByStringID(CREATION_TIME_COLUMN_ID);
+            currentLastModifiedTimeColumn = findColumnByStringID(LAST_MODIFIED_TIME_COLUMN_ID);
+
+            System.out.println("size: " + currentPath.size());
+            goToPath(currentPath.get(currentContentTabIndex));
+
+            System.out.println("Запрос на фоку.");
+            currentPath_TextField.requestFocus();
+        });
+
+        currentPath = new ArrayList<>();
+
+        activatedTreeTableView = content_TreeTableView;
+        currentNameColumn = nameColumn;
+        currentSizeColumn = sizeColumn;
+        currentOwnerColumn = ownerColumn;
+        currentCreationTimeColumn = creationTimeColumn;
+        currentLastModifiedTimeColumn = lastModifiedTimeColumn;
+        currentTypeColumn = typeColumn;
+
         content_VBox = new VBox(rem * 0.45D);
         content_VBox.setPadding(new Insets(rem * 0.15D, rem * 0.7D, rem * 0.7D, rem * 0.7D));
-        content_VBox.getChildren().addAll(currentPath_TextField, content_TreeTableView);
+        content_VBox.getChildren().addAll(currentPath_TextField, content_TabPane);
     }
 
 
@@ -489,12 +613,12 @@ public class FM_GUI extends Application
         autoSizeColumn_MenuItem.setOnAction(this::contextMenuForColumns_Action);
         contextMenuForColums.getItems().addAll(autoSizeColumn_MenuItem);
 
-        nameColumn.setContextMenu(contextMenuForColums);
-        sizeColumn.setContextMenu(contextMenuForColums);
-        ownerColumn.setContextMenu(contextMenuForColums);
-        creationTimeColumn.setContextMenu(contextMenuForColums);
-        lastModifiedTimeColumn.setContextMenu(contextMenuForColums);
-        typeColumn.setContextMenu(contextMenuForColums);
+        currentNameColumn.setContextMenu(contextMenuForColums);
+        currentSizeColumn.setContextMenu(contextMenuForColums);
+        currentOwnerColumn.setContextMenu(contextMenuForColums);
+        currentCreationTimeColumn.setContextMenu(contextMenuForColums);
+        currentLastModifiedTimeColumn.setContextMenu(contextMenuForColums);
+        currentTypeColumn.setContextMenu(contextMenuForColums);
     }
 
     private void initializeContextMenuForFiles()
@@ -514,7 +638,7 @@ public class FM_GUI extends Application
         moveFilesToClipboard_contextMenuForFilesItem.setOnAction(event ->
         {
             copyFilesToClipboard_MenuItem_Action(event);
-            filesToMoveFromClipboard=true;
+            filesToMoveFromClipboard = true;
         });
 
         MenuItem pasteFileFromClipboard_contextMenuForFilesItem = new MenuItem("Paste");
@@ -528,11 +652,11 @@ public class FM_GUI extends Application
 
         contextMenuForFiles.getItems().addAll(createFile_contextMenuForFilesItem,
                 createDirectory_contextMenuForFilesItem, new SeparatorMenuItem(), copyFileToClipboard_contextMenuForFilesItem,
-                moveFilesToClipboard_contextMenuForFilesItem,pasteFileFromClipboard_contextMenuForFilesItem,
+                moveFilesToClipboard_contextMenuForFilesItem, pasteFileFromClipboard_contextMenuForFilesItem,
                 renameFile_contextMenuForFilesItem,
                 deleteFile_contextMenuForFilesItem);
 
-        content_TreeTableView.setContextMenu(contextMenuForFiles);
+        activatedTreeTableView.setContextMenu(contextMenuForFiles);
     }
 
     private void contextMenuForColumns_Action(ActionEvent event)
@@ -542,8 +666,6 @@ public class FM_GUI extends Application
         System.out.println(temporaryColumn.getText());
         CheckMenuItem source = (CheckMenuItem) event.getSource();
 
-        //Устанавливает равенство колонок
-        //content_TreeTableView.setColumnResizePolicy(TreeTableView.CONSTRAINED_RESIZE_POLICY);
         if (source.isSelected())
         {
             temporaryColumn.setAutoFitColumnWidthToData(true);
@@ -567,29 +689,50 @@ public class FM_GUI extends Application
         if (!Files.exists(destinationPath))
         {
             System.out.println("Данного пути не существует.");
-            if (currentPath == null)
+            if (currentPath.get(currentContentTabIndex) == null)
             {
                 currentPath_TextField.setText(FIlE_SYSTEMS_PATH);
             }
             else
             {
-                currentPath_TextField.setText(currentPath.toAbsolutePath().toString());
+                currentPath_TextField.setText(currentPath.get(currentContentTabIndex).toAbsolutePath().toString());
             }
             return false;
         }
 
-        if(!content_TreeTableView.isTableMenuButtonVisible())
+
+        if (!activatedTreeTableView.isTableMenuButtonVisible())
         {
-            content_TreeTableView.setTableMenuButtonVisible(true);
+            activatedTreeTableView.setTableMenuButtonVisible(true);
         }
         System.out.println("destination: " + destinationPath);
 
         currentPath_TextField.setText(destinationPath.toAbsolutePath().toString());
-        currentPath = destinationPath;
+        if (currentPath.size() != 0)
+        {
+            currentPath.remove(currentContentTabIndex);
+        }
+        currentPath.add(currentContentTabIndex, destinationPath);
+
+        if (createNewTab_MenuItem.isDisable())
+        {
+            createNewTab_MenuItem.setDisable(false);
+
+        }
+
+        //Скорее всего из-за обращения к корневому каталогу /
+        if (destinationPath.getFileName() == null)
+        {
+            content_TabPane.getSelectionModel().getSelectedItem().setText(destinationPath.toAbsolutePath().toString());
+        }
+        else
+        {
+            content_TabPane.getSelectionModel().getSelectedItem().setText(destinationPath.getFileName().toString());
+        }
 
         try
         {
-            updateFilesContent(currentPath);
+            updateFilesContent(destinationPath, activatedTreeTableView.getRoot());
         }
         catch (IOException ioException)
         {
@@ -602,11 +745,11 @@ public class FM_GUI extends Application
      * Обновляет всю таблицу файлов исходя из текущего пути создавая новые объекты.
      * Также устанавливает выделение на первый элемент в таблице, если он есть.
      */
-    private boolean updateFilesContent(final Path destinationPath) throws IOException
+    private boolean updateFilesContent(final Path destinationPath, TreeItem<FileData> currentRootItem) throws IOException
     {
         long startTime = System.currentTimeMillis();
         System.out.println("updatePath: " + destinationPath);
-        rootItem.getChildren().clear();
+        currentRootItem.getChildren().clear();
 
         try (Stream<Path> filesStream = Files.list(destinationPath))
         {
@@ -619,15 +762,15 @@ public class FM_GUI extends Application
                 try
                 {
                     temporaryFileData = new FileData(temporaryPath.getFileName().toString(), Files.size(temporaryPath));
-                    if (ownerColumn.isVisible())
+                    if (currentOwnerColumn.isVisible())
                     {
                         temporaryFileData.setOwner(Files.getOwner(temporaryPath).getName());
                     }
-                    if (lastModifiedTimeColumn.isVisible())
+                    if (currentLastModifiedTimeColumn.isVisible())
                     {
                         temporaryFileData.setLastModifiedTime(Files.getLastModifiedTime(temporaryPath));
                     }
-                    if (creationTimeColumn.isVisible())
+                    if (currentCreationTimeColumn.isVisible())
                     {
                         temporaryFileData.setCreationTime(Files.readAttributes(temporaryPath, BasicFileAttributes.class).creationTime());
                     }
@@ -635,7 +778,7 @@ public class FM_GUI extends Application
                     temporaryFileData.setFile(Files.isRegularFile(temporaryPath));
                     temporaryFileData.setSymbolicLink(Files.isSymbolicLink(temporaryPath));
 
-                    rootItem.getChildren().add(new TreeItem<>(temporaryFileData));
+                    currentRootItem.getChildren().add(new TreeItem<>(temporaryFileData));
                 }
                 catch (IOException ioException)
                 {
@@ -645,18 +788,18 @@ public class FM_GUI extends Application
 
         }
         System.out.println("Прошло времени: " + (System.currentTimeMillis() - startTime));
-        if (content_TreeTableView.getExpandedItemCount() != 0)
+        if (activatedTreeTableView.getExpandedItemCount() != 0)
         {
-            content_TreeTableView.getSelectionModel().clearSelection();
-            content_TreeTableView.getSelectionModel().select(0);
+            activatedTreeTableView.getSelectionModel().clearSelection();
+            activatedTreeTableView.getSelectionModel().select(0);
         }
 
-        requestSort(lastActiveSortColumn);
+        requestSort(lastActiveSortColumn, currentTypeColumn);
 
-        if (content_TreeTableView.getExpandedItemCount() != 0)
+        if (activatedTreeTableView.getExpandedItemCount() != 0)
         {
-            content_TreeTableView.getSelectionModel().clearSelection();
-            content_TreeTableView.getSelectionModel().select(0);
+            activatedTreeTableView.getSelectionModel().clearSelection();
+            activatedTreeTableView.getSelectionModel().select(0);
         }
         return true;
     }
@@ -678,11 +821,12 @@ public class FM_GUI extends Application
      * Позволяет задать свой список элементов в таблице содержимого. Содержимое
      * при это не очищается.
      */
-    private boolean addCustomToContentInTable(String pathName, String... names)
+    private boolean addCustomToContentInTable(TreeItem<FileData> targetRootItem, String pathName,
+                                              String... names)
     {
         for (String currentName : names)
         {
-            rootItem.getChildren().add(new TreeItem<>(new FileData(currentName, 4L)));
+            targetRootItem.getChildren().add(new TreeItem<>(new FileData(currentName, 4L)));
         }
         currentPath_TextField.setText(pathName);
         return true;
@@ -693,17 +837,33 @@ public class FM_GUI extends Application
      */
     private void contentKeyPressed_Action(KeyEvent event)
     {
-        if (event.getCode() == KeyCode.ENTER)
+        KeyCode keyRelease_KeyCode = event.getCode();
+
+        if (keyRelease_KeyCode == KeyCode.ENTER)
         {
-            if (currentPath != null)
+            if (currentPath.size() != 0 &&
+                    currentPath.get(currentContentTabIndex) != null)
             {
                 System.out.println("Новый путь: " + currentPath);
-                goToPath(currentPath.resolve(content_TreeTableView.getSelectionModel().getSelectedItem().getValue().getName()));
+                goToPath(currentPath.get(currentContentTabIndex).resolve(activatedTreeTableView.getSelectionModel().getSelectedItem().getValue().getName()));
             }
             else
             {
-                goToPath(Paths.get(content_TreeTableView.getSelectionModel().getSelectedItem().getValue().getName()));
+                goToPath(Paths.get(activatedTreeTableView.getSelectionModel().getSelectedItem().getValue().getName()));
             }
+        }
+        else if (keyRelease_KeyCode == KeyCode.F2)
+        {
+            System.out.println("Огонь");
+            rename_MenuItem.fire();
+        }
+        else if (keyRelease_KeyCode == KeyCode.PAGE_UP && event.isControlDown())
+        {
+            goToPreviousTab_MenuItem.fire();
+        }
+        else if (keyRelease_KeyCode == KeyCode.PAGE_DOWN && event.isControlDown())
+        {
+            goToNextTab_MenuItem.fire();
         }
 //        if (event.getCode() == KeyCode.F2)
 //        {
@@ -739,14 +899,15 @@ public class FM_GUI extends Application
         if (event.getButton() == MouseButton.PRIMARY &&
                 event.getClickCount() == 2)
         {
-            if (currentPath != null)
+            if (currentPath.size() != 0 &&
+                    currentPath.get(currentContentTabIndex) != null)
             {
-                goToPath(currentPath.resolve(content_TreeTableView.getSelectionModel().getSelectedItem().getValue().getName()));
+                goToPath(currentPath.get(currentContentTabIndex).resolve(activatedTreeTableView.getSelectionModel().getSelectedItem().getValue().getName()));
             }
             else
             {
-                System.out.println(content_TreeTableView.getSelectionModel().getSelectedItem().getValue().getName());
-                goToPath(Paths.get(content_TreeTableView.getSelectionModel().getSelectedItem().getValue().getName()));
+                System.out.println(activatedTreeTableView.getSelectionModel().getSelectedItem().getValue().getName());
+                goToPath(Paths.get(activatedTreeTableView.getSelectionModel().getSelectedItem().getValue().getName()));
             }
         }
     }
@@ -758,59 +919,60 @@ public class FM_GUI extends Application
      * во время срабатывания контекстного меню компонент не запрашивал сортировку
      * самостоятельно.
      */
-    private void requestSort(CustomTreeTableColumn<FileData, ?> targetColumn)
+    private void requestSort(CustomTreeTableColumn<FileData, ?> targetColumn, CustomTreeTableColumn<FileData, ?>
+            targetTypeColumn)
     {
-        lastActiveSortColumn = targetColumn;
-        targetColumn.setSortable(true);
-        typeColumn.setSortable(true);
-        nameColumn.setSortable(true);
-        sizeColumn.setSortable(true);
-        ownerColumn.setSortable(true);
-        creationTimeColumn.setSortable(true);
-        lastModifiedTimeColumn.setSortable(true);
-
-        if (content_TreeTableView.getExpandedItemCount() < 2)
+        if (activatedTreeTableView.getExpandedItemCount() < 2)
         {
             return;
         }
 
+        lastActiveSortColumn = targetColumn;
+
+        Iterator<TreeTableColumn<FileData, ?>> iterator = activatedTreeTableView.getColumns().iterator();
+        while (iterator.hasNext())
+        {
+            iterator.next().setSortable(true);
+        }
+        targetColumn.setSortable(true);
+
         targetColumn.setSortType(sortType);
-        content_TreeTableView.getSortOrder().clear();
+        activatedTreeTableView.getSortOrder().clear();
 
         if (directoriesFirst_MenuItem.isSelected())
         {
-            typeColumn.setSortType(TreeTableColumn.SortType.DESCENDING);
-            content_TreeTableView.getSortOrder().add(typeColumn);
+            targetTypeColumn.setSortType(TreeTableColumn.SortType.DESCENDING);
+            activatedTreeTableView.getSortOrder().add(targetTypeColumn);
         }
 
-        content_TreeTableView.getSortOrder().add(targetColumn);
-        content_TreeTableView.sort();
+        activatedTreeTableView.getSortOrder().add(targetColumn);
+        activatedTreeTableView.sort();
 
         //================ Проверка на то, что каталоги действительно идут первыми
         if (directoriesFirst_MenuItem.isSelected())
         {
             int temporaryLength = 3;
-            if (temporaryLength > content_TreeTableView.getExpandedItemCount())
+            if (temporaryLength > activatedTreeTableView.getExpandedItemCount())
             {
-                temporaryLength = content_TreeTableView.getExpandedItemCount();
+                temporaryLength = activatedTreeTableView.getExpandedItemCount();
             }
 
             for (int k = 0; k < temporaryLength; k++)
             {
-                if (content_TreeTableView.getTreeItem(k).getValue().isDirectory())
+                if (activatedTreeTableView.getTreeItem(k).getValue().isDirectory())
                 {
                     System.out.println("Директория");
                 }
                 else
                 {
                     System.out.println("Скорее всего нужно поменять тип сортировки.");
-                    if (typeColumn.getSortType() == TreeTableColumn.SortType.ASCENDING)
+                    if (targetTypeColumn.getSortType() == TreeTableColumn.SortType.ASCENDING)
                     {
-                        typeColumn.setSortType(TreeTableColumn.SortType.DESCENDING);
+                        targetTypeColumn.setSortType(TreeTableColumn.SortType.DESCENDING);
                     }
                     else
                     {
-                        typeColumn.setSortType(TreeTableColumn.SortType.ASCENDING);
+                        targetTypeColumn.setSortType(TreeTableColumn.SortType.ASCENDING);
                     }
                 }
             }
@@ -818,12 +980,11 @@ public class FM_GUI extends Application
         //=============================================================
 
         targetColumn.setSortable(false);
-        typeColumn.setSortable(false);
-        nameColumn.setSortable(false);
-        sizeColumn.setSortable(false);
-        ownerColumn.setSortable(false);
-        creationTimeColumn.setSortable(false);
-        lastModifiedTimeColumn.setSortable(false);
+        iterator = activatedTreeTableView.getColumns().iterator();
+        while (iterator.hasNext())
+        {
+            iterator.next().setSortable(false);
+        }
     }
 
     /**
@@ -836,7 +997,7 @@ public class FM_GUI extends Application
         VBox filesToDeleting_VBox = new VBox(rem * 0.15D);
         Label[] files_Labels = null;
 
-        ObservableList<TreeItem<FileData>> files_ObservableList = content_TreeTableView.getSelectionModel().getSelectedItems();
+        ObservableList<TreeItem<FileData>> files_ObservableList = activatedTreeTableView.getSelectionModel().getSelectedItems();
         files_Labels = new Label[files_ObservableList.size()];
         for (int k = 0; k < files_ObservableList.size(); k++)
         {
@@ -867,7 +1028,7 @@ public class FM_GUI extends Application
                 for (int k = 0; k < files_ObservableList.size(); k++)
                 {
                     temporaryName = files_ObservableList.get(k).getValue().getName();
-                    temporaryPath = currentPath.resolve(Paths.get(temporaryName));
+                    temporaryPath = currentPath.get(currentContentTabIndex).resolve(Paths.get(temporaryName));
                     System.out.println("На удаление: " + temporaryPath.toAbsolutePath().toString());
                     if (deleteFileRecursively(temporaryPath))
                     {
@@ -878,7 +1039,7 @@ public class FM_GUI extends Application
                 }
 
                 //Обновляем плохим образом, ибо хорошим нету больше сил.
-                goToPath(currentPath);
+                goToPath(currentPath.get(currentContentTabIndex));
                 //removeRowsFromTreeTableView(files_ObservableList);
 
             }
@@ -927,6 +1088,7 @@ public class FM_GUI extends Application
      */
     private void removeRowsFromTreeTableView(ObservableList<TreeItem<FileData>> targetRows)
     {
+
         Iterator<TreeItem<FileData>> iterator = targetRows.iterator();
         while (iterator.hasNext())
         {
@@ -934,7 +1096,7 @@ public class FM_GUI extends Application
             String name = temporaryItem.getName();
             System.out.println("Item: " + name);
             System.out.println("size: " + root.getChildren().size());
-            root.getChildren().remove(temporaryItem);
+            activatedTreeTableView.getRoot().getChildren().remove(temporaryItem);
         }
     }
 
@@ -960,7 +1122,7 @@ public class FM_GUI extends Application
 
         TextField fileName_TextField = new TextField();
         fileName_TextField.setPromptText("Enter new name here");
-        fileName_TextField.setOnKeyPressed(eventFileName ->
+        fileName_TextField.setOnKeyReleased(eventFileName ->
         {
             if (fileAlreadyExists_Label != null)
             {
@@ -969,8 +1131,8 @@ public class FM_GUI extends Application
         });
 
 
-        FileData temporaryFileData = content_TreeTableView.getSelectionModel().getSelectedItem().getValue();
-        Path temporaryPath = currentPath.resolve(temporaryFileData.getName());
+        FileData temporaryFileData = activatedTreeTableView.getSelectionModel().getSelectedItem().getValue();
+        Path temporaryPath = currentPath.get(currentContentTabIndex).resolve(temporaryFileData.getName());
 
         fileName_TextField.setText(temporaryFileData.getName());
 
@@ -1006,7 +1168,7 @@ public class FM_GUI extends Application
             {
                 try
                 {
-                    targetPath = currentPath.resolve(fileName_TextField.getText());
+                    targetPath = currentPath.get(currentContentTabIndex).resolve(fileName_TextField.getText());
                     Path resultPath = Files.move(temporaryPath, targetPath);
 
                     if (resultPath != null)
@@ -1035,12 +1197,12 @@ public class FM_GUI extends Application
 
             try
             {
-                FileData temporaryData = content_TreeTableView.getSelectionModel().getSelectedItem().getValue();
+                FileData temporaryData = activatedTreeTableView.getSelectionModel().getSelectedItem().getValue();
                 temporaryData = temporaryData.cloneFileData();
                 temporaryData.setName(targetPath.getFileName().toString());
-                content_TreeTableView.getSelectionModel().getSelectedItem().setValue(temporaryData);
+                activatedTreeTableView.getSelectionModel().getSelectedItem().setValue(temporaryData);
             }
-            catch(CloneNotSupportedException cloneNotSupportedException)
+            catch (CloneNotSupportedException cloneNotSupportedException)
             {
                 cloneNotSupportedException.printStackTrace();
             }
@@ -1050,37 +1212,23 @@ public class FM_GUI extends Application
 
     private void copyFileName_MenuItem_Action(ActionEvent event)
     {
+
         ClipboardContent clipboardContent = new ClipboardContent();
-        clipboardContent.putString(content_TreeTableView.getSelectionModel().getSelectedItem().getValue().getName());
+        clipboardContent.putString(activatedTreeTableView.getSelectionModel().getSelectedItem().getValue().getName());
         if (Clipboard.getSystemClipboard().setContent(clipboardContent))
         {
-            showLittleNotification(stage,"Files has been successfully copied to clipboard.",3);
+            showLittleNotification(stage, "Files has been successfully copied to clipboard.", 3);
         }
     }
 
     private void copyAbsoluteNamePath_MenuItem_Action(ActionEvent event)
     {
         ClipboardContent clipboardContent = new ClipboardContent();
-        clipboardContent.putString(currentPath.resolve(content_TreeTableView.getSelectionModel().
+        clipboardContent.putString(currentPath.get(currentContentTabIndex).resolve(activatedTreeTableView.getSelectionModel().
                 getSelectedItem().getValue().getName()).toAbsolutePath().toString());
         if (Clipboard.getSystemClipboard().setContent(clipboardContent))
         {
-            Tooltip tooltip = new Tooltip("Absolute path of selected file has been copied.");
-            tooltip.setWrapText(true);
-            tooltip.setHideOnEscape(true);
-            tooltip.setAutoHide(true);
-            tooltip.setFont(Font.font(tooltip.getFont().getName(), FontWeight.BOLD, 12.0D));
-            tooltip.setOnShown(eventToolTip ->
-            {
-                Timeline timeline = new Timeline(new KeyFrame(Duration.seconds(3.0D), eventHide ->
-                {
-                    tooltip.hide();
-                }));
-                timeline.play();
-            });
-            Text temporaryText = new Text(tooltip.getText());
-            tooltip.show(stage, (stage.getX() + stage.getWidth() / 2.0D) -
-                    temporaryText.getBoundsInParent().getWidth() / 2.0D, stage.getY() + stage.getHeight() / 2);
+            showLittleNotification(stage, "Absolute path of selected file has been copied.", 3);
         }
     }
 
@@ -1106,7 +1254,7 @@ public class FM_GUI extends Application
 
         TextField fileName_TextField = new TextField();
         fileName_TextField.setPromptText("Enter name of file here");
-        fileName_TextField.setOnKeyPressed(textFieldEvent ->
+        fileName_TextField.setOnKeyReleased(textFieldEvent ->
         {
             if (fileAlreadyExists_Label != null)
             {
@@ -1202,7 +1350,7 @@ public class FM_GUI extends Application
             {
                 try
                 {
-                    Path targetPath = currentPath.resolve(fileName_TextField.getText());
+                    Path targetPath = currentPath.get(currentContentTabIndex).resolve(fileName_TextField.getText());
                     resultPath = Files.createFile(targetPath);
 
                     if (resultPath != null && Files.exists(resultPath))
@@ -1322,7 +1470,7 @@ public class FM_GUI extends Application
 
         TextField fileName_TextField = new TextField();
         fileName_TextField.setPromptText("Enter name of directory here");
-        fileName_TextField.setOnKeyPressed(textFieldEvent ->
+        fileName_TextField.setOnKeyReleased(textFieldEvent ->
         {
             if (fileAlreadyExists_Label != null)
             {
@@ -1408,6 +1556,7 @@ public class FM_GUI extends Application
                     BorderStrokeStyle.SOLID, CornerRadii.EMPTY, BorderStroke.MEDIUM, Insets.EMPTY)));
         }
 
+
         Path resultPath = null;
         while (true)
         {
@@ -1418,7 +1567,7 @@ public class FM_GUI extends Application
             {
                 try
                 {
-                    Path targetPath = currentPath.resolve(fileName_TextField.getText());
+                    Path targetPath = currentPath.get(currentContentTabIndex).resolve(fileName_TextField.getText());
                     resultPath = Files.createDirectory(targetPath);
 
                     if (resultPath != null && Files.exists(resultPath))
@@ -1531,173 +1680,132 @@ public class FM_GUI extends Application
         ConfirmDialogButtonType lastActivatedConfirmButtonType = null;
 
         while (true)
-        copyFinished:
-            {
-                Path temporarySourcePath = null;
-                Path temporaryTargetPath = null;
-                boolean uniteDirectories = false;
-
-                try
-                {
-                    if (lastActivatedConfirmButtonType == ConfirmDialogButtonType.SKIP)
+            copyFinished:
                     {
-                        countSuccessfullyCopiedFiles++;
-                        lastActivatedConfirmButtonType = null;
-                    }
-                    else if (lastActivatedConfirmButtonType == ConfirmDialogButtonType.UNITE)
-                    {
-                        uniteDirectories = true;
-                    }
+                        Path temporarySourcePath = null;
+                        Path temporaryTargetPath = null;
+                        boolean uniteDirectories = false;
 
-
-                    for (int k = countSuccessfullyCopiedFiles; k < filesToPaste_List.size(); k++)
-                    {
-                        temporarySourcePath = filesToPaste_List.get(k).toPath();
-                        temporaryTargetPath = currentPath.resolve(temporarySourcePath.getFileName());
-                        //System.out.println("source: " + temporarySourcePath.toAbsolutePath().toString());
-                        //System.out.println("target: " + temporaryTargetPath.toAbsolutePath().toString());
-
-                        if (copyFileRecursively(temporarySourcePath, temporaryTargetPath,
-                                uniteDirectories))
+                        try
                         {
-                            System.out.println("Рекурсивное копирование завершено.");
+                            if (lastActivatedConfirmButtonType == ConfirmDialogButtonType.SKIP)
+                            {
+                                countSuccessfullyCopiedFiles++;
+                                lastActivatedConfirmButtonType = null;
+                            }
+                            else if (lastActivatedConfirmButtonType == ConfirmDialogButtonType.UNITE)
+                            {
+                                uniteDirectories = true;
+                            }
+
+
+                            for (int k = countSuccessfullyCopiedFiles; k < filesToPaste_List.size(); k++)
+                            {
+                                temporarySourcePath = filesToPaste_List.get(k).toPath();
+                                temporaryTargetPath = currentPath.get(currentContentTabIndex).resolve(temporarySourcePath.getFileName());
+                                //System.out.println("source: " + temporarySourcePath.toAbsolutePath().toString());
+                                //System.out.println("target: " + temporaryTargetPath.toAbsolutePath().toString());
+
+                                if (copyFileRecursively(temporarySourcePath, temporaryTargetPath,
+                                        uniteDirectories))
+                                {
+                                    System.out.println("Рекурсивное копирование завершено.");
+                                }
+                                if (filesToMoveFromClipboard)
+                                {
+                                    deleteFileRecursively(temporarySourcePath);
+                                }
+
+                                countSuccessfullyCopiedFiles++;
+                                uniteDirectories = false;
+                            }
                         }
-                        if(filesToMoveFromClipboard)
+                        catch (FileAlreadyExistsException fileAlreadyExistsException)
                         {
-                            deleteFileRecursively(temporarySourcePath);
-                        }
+                            System.out.println("файл уже существует!");
+                            //fileAlreadyExistsException.printStackTrace();
 
-                        countSuccessfullyCopiedFiles++;
-                        uniteDirectories = false;
-                    }
-                }
-                catch (FileAlreadyExistsException fileAlreadyExistsException)
-                {
-                    System.out.println("файл уже существует!");
-                    //fileAlreadyExistsException.printStackTrace();
-
-                    //-------------------------- Инициализируем окно запроса действия
-                    VBox fileName_VBox = new VBox(rem * 0.15D);
-                    fileName_VBox.setAlignment(Pos.CENTER);
+                            //-------------------------- Инициализируем окно запроса действия
+                            VBox fileName_VBox = new VBox(rem * 0.15D);
+                            fileName_VBox.setAlignment(Pos.CENTER);
 //        fileName_VBox.setBackground(new Background(new BackgroundFill(Color.LIGHTCYAN,
 //                CornerRadii.EMPTY, Insets.EMPTY)));
 
-                    final Label fileAlreadyExists_Label = new Label("File with the same name already exists.");
-                    fileAlreadyExists_Label.setWrapText(true);
-                    fileAlreadyExists_Label.setVisible(false);
-                    fileAlreadyExists_Label.setTextFill(Color.LIGHTCORAL);
-                    //fileAlreadyExists_Label.setBackground(new Background(new BackgroundFill(Color.LIGHTCYAN, CornerRadii.EMPTY, Insets.EMPTY)));
-                    fileAlreadyExists_Label.setFont(Font.font(fileAlreadyExists_Label.getFont().getName(),
-                            FontWeight.BOLD, 12.0D));
-
-                    TextField fileName_TextField = new TextField();
-                    fileName_TextField.setPromptText("Enter new name here");
-                    fileName_TextField.setOnKeyPressed(eventFileName ->
-                    {
-                        if (fileAlreadyExists_Label != null)
-                        {
+                            final Label fileAlreadyExists_Label = new Label("File with the same name already exists.");
+                            fileAlreadyExists_Label.setWrapText(true);
                             fileAlreadyExists_Label.setVisible(false);
+                            fileAlreadyExists_Label.setTextFill(Color.LIGHTCORAL);
+                            //fileAlreadyExists_Label.setBackground(new Background(new BackgroundFill(Color.LIGHTCYAN, CornerRadii.EMPTY, Insets.EMPTY)));
+                            fileAlreadyExists_Label.setFont(Font.font(fileAlreadyExists_Label.getFont().getName(),
+                                    FontWeight.BOLD, 12.0D));
+
+                            TextField fileName_TextField = new TextField();
+                            fileName_TextField.setPromptText("Enter new name here");
+                            fileName_TextField.setOnKeyReleased(eventFileName ->
+                            {
+                                if (fileAlreadyExists_Label != null)
+                                {
+                                    fileAlreadyExists_Label.setVisible(false);
+                                }
+                            });
+
+                            Label targetPath_Label = new Label(temporaryTargetPath.getFileName().toString());
+
+
+                            FileData temporaryFileData = activatedTreeTableView.getSelectionModel().getSelectedItem().getValue();
+                            Path temporaryPath = currentPath.get(currentContentTabIndex).resolve(temporaryFileData.getName());
+
+                            fileName_TextField.setText(temporaryFileData.getName());
+
+
+                            fileName_VBox.getChildren().addAll(targetPath_Label);
+
+                            confirmOperationDialog.setTitle("Copy");
+                            confirmOperationDialog.setHeaderText("Copy");
+                            confirmOperationDialog.setHeaderColor(Color.GREEN);
+                            confirmOperationDialog.setMessageText("File with same name already exists in this directory. What would yo like do ?");
+                            confirmOperationDialog.setMessageTextColor(Color.BLACK);
+                            confirmOperationDialog.setMessageTextFont(Font.font(Font.getDefault().getName(), FontWeight.BOLD, 13.0D));
+                            confirmOperationDialog.setOperationButtons(ConfirmDialogButtonType.CANCEL, ConfirmDialogButtonType.UNITE, ConfirmDialogButtonType.SKIP);
+                            ConfirmOperationButton confirmButton = (ConfirmOperationButton) confirmOperationDialog.getOperationButtons().get(1);
+                            confirmButton.setText("Unite");
+                            confirmOperationDialog.setContent(fileName_VBox);
+                            confirmOperationDialog.setConfirmOperationOnEnterKey(true);
+                            confirmOperationDialog.setBackgroundToRootNode(new Background(new BackgroundFill(Color.LIGHTGREEN, CornerRadii.EMPTY, Insets.EMPTY)));
+                            confirmOperationDialog.showAndWait();
+                            lastActivatedConfirmButtonType = confirmOperationDialog.getActivatedOperationButton();
+                            //=============================================
+                            if (lastActivatedConfirmButtonType == ConfirmDialogButtonType.CANCEL)
+                            {
+                                showLittleNotification(stage, "Copy operation has been stopped.", 3);
+                                break;
+                            }
                         }
-                    });
+                        catch (DirectoryNotEmptyException directoryNotEmptyException)
+                        {
+                            System.out.println("Каталог не пуст.");
+                            lastActivatedConfirmButtonType = ConfirmDialogButtonType.UNITE;
+                            uniteDirectories = true;
+                        }
+                        catch (IOException ioException)
+                        {
+                            ioException.printStackTrace();
+                            break;
+                        }
+                        if (countSuccessfullyCopiedFiles == filesToPaste_List.size())
+                        {
+                            String message = "Files have benn successfully copied.";
+                            if (filesToMoveFromClipboard)
+                            {
+                                message = "Files have been successfully moved.";
+                            }
 
-                    Label targetPath_Label = new Label(temporaryTargetPath.getFileName().toString());
-
-
-                    FileData temporaryFileData = content_TreeTableView.getSelectionModel().getSelectedItem().getValue();
-                    Path temporaryPath = currentPath.resolve(temporaryFileData.getName());
-
-                    fileName_TextField.setText(temporaryFileData.getName());
-
-
-                    fileName_VBox.getChildren().addAll(targetPath_Label);
-
-                    confirmOperationDialog.setTitle("Copy");
-                    confirmOperationDialog.setHeaderText("Copy");
-                    confirmOperationDialog.setHeaderColor(Color.GREEN);
-                    confirmOperationDialog.setMessageText("File with same name already exists in this directory. What would yo like do ?");
-                    confirmOperationDialog.setMessageTextColor(Color.BLACK);
-                    confirmOperationDialog.setMessageTextFont(Font.font(Font.getDefault().getName(), FontWeight.BOLD, 13.0D));
-                    confirmOperationDialog.setOperationButtons(ConfirmDialogButtonType.CANCEL, ConfirmDialogButtonType.UNITE, ConfirmDialogButtonType.SKIP);
-                    ConfirmOperationButton confirmButton = (ConfirmOperationButton) confirmOperationDialog.getOperationButtons().get(1);
-                    confirmButton.setText("Unite");
-                    confirmOperationDialog.setContent(fileName_VBox);
-                    confirmOperationDialog.setConfirmOperationOnEnterKey(true);
-                    confirmOperationDialog.setBackgroundToRootNode(new Background(new BackgroundFill(Color.LIGHTGREEN, CornerRadii.EMPTY, Insets.EMPTY)));
-                    confirmOperationDialog.showAndWait();
-                    lastActivatedConfirmButtonType = confirmOperationDialog.getActivatedOperationButton();
-                    //=============================================
-                    if (lastActivatedConfirmButtonType == ConfirmDialogButtonType.CANCEL)
-                    {
-                        showLittleNotification(stage,"Copy operation has been stopped.",3);
-                        break;
-                    }
-                }
-                catch (DirectoryNotEmptyException directoryNotEmptyException)
-                {
-                    System.out.println("Каталог не пуст.");
-                    lastActivatedConfirmButtonType = ConfirmDialogButtonType.UNITE;
-                    uniteDirectories=true;
-                }
-                catch (IOException ioException)
-                {
-                    ioException.printStackTrace();
-                    break;
-                }
-                if (countSuccessfullyCopiedFiles == filesToPaste_List.size())
-                {
-                    String message = "Files have benn successfully copied.";
-                    if(filesToMoveFromClipboard)
-                    {
-                        message = "Files have been successfully moved.";
+                            showLittleNotification(stage, message, 3);
+                            goToPath(currentPath.get(currentContentTabIndex));
+                            break;
+                        }
                     }
 
-                    showLittleNotification(stage,message,3);
-                    goToPath(currentPath);
-                    break;
-                }
-            }
-
-    }
-
-    /**
-     * Копирует файлы с одного места в другое.
-     *
-     * @return false в случае, если массивы путей имеют разную длину.
-     */
-    private boolean copyFiles(Path[] sourceFilesPath, Path[] targetFilesPath,
-                              boolean copyAttributes, boolean copyWithReplacing) throws IOException
-    {
-        if (sourceFilesPath.length != targetFilesPath.length)
-        {
-            return false;
-        }
-
-        if (copyAttributes)
-        {
-            for (int k = 0; k < sourceFilesPath.length; k++)
-            {
-                Files.copy(sourceFilesPath[k], targetFilesPath[k],
-                        StandardCopyOption.COPY_ATTRIBUTES);
-            }
-        }
-        else if (copyWithReplacing)
-        {
-            for (int k = 0; k < sourceFilesPath.length; k++)
-            {
-                Files.copy(sourceFilesPath[k], targetFilesPath[k],
-                        StandardCopyOption.REPLACE_EXISTING);
-            }
-        }
-        else if (copyAttributes && copyWithReplacing)
-        {
-            for (int k = 0; k < sourceFilesPath.length; k++)
-            {
-                Files.copy(sourceFilesPath[k], targetFilesPath[k],
-                        StandardCopyOption.COPY_ATTRIBUTES,
-                        StandardCopyOption.REPLACE_EXISTING);
-            }
-        }
-        return true;
     }
 
 
@@ -1736,7 +1844,7 @@ public class FM_GUI extends Application
         else
         {
             Path resultPath = null;
-            if(replaceExisting)
+            if (replaceExisting)
             {
                 resultPath = Files.copy(sourceFilePath, targetFilePath, StandardCopyOption.COPY_ATTRIBUTES,
                         StandardCopyOption.REPLACE_EXISTING);
@@ -1763,7 +1871,6 @@ public class FM_GUI extends Application
      */
     private void addRowToTreeTable(Path targetPath)
     {
-
         FileData newFileDate = new FileData(targetPath.getFileName().toString(),
                 -1);
 
@@ -1775,19 +1882,19 @@ public class FM_GUI extends Application
             newFileDate.setSymbolicLink(basicFileAttributes.isSymbolicLink());
             newFileDate.setDirectory(basicFileAttributes.isDirectory());
 
-            if (creationTimeColumn.isVisible())
+            if (currentCreationTimeColumn.isVisible())
             {
                 newFileDate.setCreationTime(basicFileAttributes.creationTime());
             }
-            if (lastModifiedTimeColumn.isVisible())
+            if (currentLastModifiedTimeColumn.isVisible())
             {
                 newFileDate.setLastModifiedTime(basicFileAttributes.lastModifiedTime());
             }
-            if (ownerColumn.isVisible())
+            if (currentOwnerColumn.isVisible())
             {
                 newFileDate.setOwner(Files.getOwner(targetPath, LinkOption.NOFOLLOW_LINKS).getName());
             }
-            rootItem.getChildren().add(new TreeItem<>(newFileDate));
+            activatedTreeTableView.getRoot().getChildren().add(new TreeItem<>(newFileDate));
         }
         catch (IOException ioException)
         {
@@ -1799,46 +1906,51 @@ public class FM_GUI extends Application
     {
         ClipboardContent clipboardContent = new ClipboardContent();
 
-        ObservableList<TreeItem<FileData>> selectedItems = content_TreeTableView
+        ObservableList<TreeItem<FileData>> selectedItems = activatedTreeTableView
                 .getSelectionModel().getSelectedItems();
 
         List<File> filesToCopy_List = new ArrayList<File>();
         for (int k = 0; k < selectedItems.size(); k++)
         {
-            filesToCopy_List.add(currentPath.resolve(selectedItems.get(k).
+            filesToCopy_List.add(currentPath.get(currentContentTabIndex).resolve(selectedItems.get(k).
                     getValue().getName()).toFile());
         }
         if (clipboardContent.putFiles(filesToCopy_List))
         {
             Clipboard.getSystemClipboard().setContent(clipboardContent);
 
-            showLittleNotification(stage,"Files have been successfully copied to clipboard.",3);
+            showLittleNotification(stage, "Files have been successfully copied to clipboard.", 3);
         }
     }
 
-    /**Отображает в таблице файлов разделы жесткого диска (и не только),
-     * при этом предыдущие данные в таблице очищаются.*/
+    /**
+     * Отображает в таблице файлов разделы жесткого диска (и не только),
+     * при этом предыдущие данные в таблице очищаются.
+     */
     private void goToDriveList()
     {
-        ownerColumn.setVisible(false);
-        creationTimeColumn.setVisible(false);
-        lastModifiedTimeColumn.setVisible(false);
-        content_TreeTableView.setTableMenuButtonVisible(false);
+        currentOwnerColumn.setVisible(false);
+        currentCreationTimeColumn.setVisible(false);
+        currentLastModifiedTimeColumn.setVisible(false);
+        activatedTreeTableView.setTableMenuButtonVisible(false);
 
-        rootItem.getChildren().clear();
+        activatedTreeTableView.getRoot().getChildren().clear();
         Iterable<FileStore> fileStores_Iterable = FileSystems.getDefault().getFileStores();
         String temporaryFileStorePath = null;
         for (FileStore temporaryFileStore : fileStores_Iterable)
         {
             temporaryFileStorePath = temporaryFileStore.toString();
             temporaryFileStorePath = temporaryFileStorePath.substring(0,
-                    temporaryFileStorePath.indexOf('(')-1);
-            addCustomToContentInTable(FIlE_SYSTEMS_PATH,temporaryFileStorePath);
+                    temporaryFileStorePath.indexOf('(') - 1);
+            addCustomToContentInTable(activatedTreeTableView.getRoot(), FIlE_SYSTEMS_PATH, temporaryFileStorePath);
         }
+        currentPath_TextField.setText(FIlE_SYSTEMS_PATH);
     }
 
 
-    /**Отображает всплывающую подсказку - небольшое уведомление.*/
+    /**
+     * Отображает всплывающую подсказку - небольшое уведомление.
+     */
     private void showLittleNotification(Window window, String message, final int DurationInSeconds)
     {
         Tooltip tooltip = new Tooltip(message);
@@ -1858,6 +1970,217 @@ public class FM_GUI extends Application
         Text temporaryText = new Text(tooltip.getText());
         tooltip.show(stage, (stage.getX() + stage.getWidth() / 2.0D) -
                 temporaryText.getBoundsInParent().getWidth() / 2.0D, stage.getY() + stage.getHeight() / 2);
+    }
+
+    private void createNewTab_Action(ActionEvent event)
+    {
+        Tab newTab = new Tab();
+        newTab.setClosable(true);
+
+        //---------------------------- TreeTableView
+        TreeTableView<FileData> newTreeTableView = new TreeTableView<>();
+        newTreeTableView.setOnKeyReleased(this::contentKeyPressed_Action);
+        newTreeTableView.setContextMenu(contextMenuForFiles);
+        newTreeTableView.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
+
+
+        CustomTreeTableColumn<FileData, String> newNameColumn = new CustomTreeTableColumn<>("Name");
+        newNameColumn.setMinWidth(preferredWidth * 0.1D);
+        newNameColumn.setPrefWidth(preferredWidth * 0.5D);
+        newNameColumn.setSortable(false);
+        newNameColumn.setId(NAME_COLUMN_ID);
+        newNameColumn.setContextMenu(contextMenuForColums);
+        newNameColumn.setCellFactory(new Callback<TreeTableColumn<FileData, String>, TreeTableCell<FileData, String>>()
+        {
+            @Override
+            public TreeTableCell<FileData, String> call(TreeTableColumn<FileData, String> fileDataStringTreeTableColumn)
+            {
+                CustomTreeTableCell<FileData, String> temporaryCell = new CustomTreeTableCell<>();
+                //temporaryCell.setTextFill(Color.LIGHTSKYBLUE);
+                temporaryCell.setOnMouseClicked(event ->
+                {
+                    cellMouseClicked_Action(event);
+                });
+                return temporaryCell;
+            }
+        });
+
+        CustomTreeTableColumn<FileData, Long> newSizeColumn = new CustomTreeTableColumn<>("Size");
+        newSizeColumn.setMinWidth(preferredWidth * 0.05D);
+        newSizeColumn.setPrefWidth(preferredWidth * 0.1D);
+        newSizeColumn.setSortable(false);
+        newSizeColumn.setContextMenu(contextMenuForColums);
+        newSizeColumn.setId(SIZE_COLUMN_ID);
+
+        CustomTreeTableColumn<FileData, String> newOwnerColumn = new CustomTreeTableColumn<>("Owner");
+        newOwnerColumn.setMinWidth(preferredWidth * 0.1D);
+        newOwnerColumn.setSortable(false);
+        newOwnerColumn.setVisible(false);
+        newOwnerColumn.setId(OWNER_COLUMN_ID);
+        newOwnerColumn.setContextMenu(contextMenuForColums);
+        newOwnerColumn.visibleProperty().addListener(eventOwner ->
+        {
+            if (newOwnerColumn.isVisible())
+            {
+                goToPath(currentPath.get(currentContentTabIndex));
+            }
+            else
+            {
+                if (sortByOwner_MenuItem.isSelected())
+                {
+                    sortByName_MenuItem.setSelected(true);
+                    lastActiveSortColumn = currentNameColumn;
+                }
+            }
+        });
+
+        CustomTreeTableColumn<FileData, String> newLastModifiedTimeColumn = new CustomTreeTableColumn<>("Last modified time");
+        newLastModifiedTimeColumn.setMinWidth(preferredWidth * 0.15D);
+        newLastModifiedTimeColumn.setSortable(false);
+        newLastModifiedTimeColumn.setVisible(false);
+        newLastModifiedTimeColumn.setContextMenu(contextMenuForColums);
+        newLastModifiedTimeColumn.setId(LAST_MODIFIED_TIME_COLUMN_ID);
+        newLastModifiedTimeColumn.visibleProperty().addListener(eventLast ->
+        {
+            if (newLastModifiedTimeColumn.isVisible())
+            {
+                goToPath(currentPath.get(currentContentTabIndex));
+            }
+            else
+            {
+                if (sortByLastModifiedTime_MenuItem.isSelected())
+                {
+                    sortByName_MenuItem.setSelected(true);
+                    lastActiveSortColumn = currentNameColumn;
+                }
+            }
+        });
+
+        CustomTreeTableColumn<FileData, String> newCreationTimeColumn = new CustomTreeTableColumn<>("Creation time");
+        newCreationTimeColumn.setMinWidth(preferredWidth * 0.15D);
+        newCreationTimeColumn.setSortable(false);
+        newCreationTimeColumn.setVisible(false);
+        newCreationTimeColumn.setId(CREATION_TIME_COLUMN_ID);
+        newCreationTimeColumn.setContextMenu(contextMenuForColums);
+        newCreationTimeColumn.visibleProperty().addListener(eventCreation ->
+        {
+            if (newCreationTimeColumn.isVisible())
+            {
+                System.out.println("Переход по пути");
+                goToPath(currentPath.get(currentContentTabIndex));
+            }
+            else
+            {
+                if (sortByCreationTime_MenuItem.isSelected())
+                {
+                    sortByName_MenuItem.setSelected(true);
+                    lastActiveSortColumn = currentNameColumn;
+                }
+            }
+        });
+
+        CustomTreeTableColumn<FileData, String> newTypeColumn = new CustomTreeTableColumn<>("Type");
+        newTypeColumn.setMinWidth(preferredWidth * 0.1D);
+        newTypeColumn.setSortable(false);
+        newTypeColumn.setPrefWidth(preferredWidth * 0.15D);
+        newTypeColumn.setContextMenu(contextMenuForColums);
+        newTypeColumn.setId(TYPE_COLUMN_ID);
+        newTypeColumn.visibleProperty().addListener(eventTypeColumn ->
+        {
+            if (newTypeColumn.isVisible())
+            {
+                goToPath(currentPath.get(currentContentTabIndex));
+            }
+
+        });
+
+
+        newNameColumn.setCellValueFactory((TreeTableColumn.CellDataFeatures<FileData, String> param) ->
+                new ReadOnlyStringWrapper(param.getValue().getValue().getName()));
+        newSizeColumn.setCellValueFactory((TreeTableColumn.CellDataFeatures<FileData, Long> param) ->
+                new ReadOnlyObjectWrapper<>(param.getValue().getValue().getSize()));
+        newOwnerColumn.setCellValueFactory((TreeTableColumn.CellDataFeatures<FileData, String> param) ->
+                new ReadOnlyStringWrapper(param.getValue().getValue().getOwner()));
+        newLastModifiedTimeColumn.setCellValueFactory((TreeTableColumn.CellDataFeatures<FileData, String> param) ->
+                new ReadOnlyStringWrapper(param.getValue().getValue().getLastModifiedTime(true)));
+        newCreationTimeColumn.setCellValueFactory((TreeTableColumn.CellDataFeatures<FileData, String> param) ->
+                new ReadOnlyStringWrapper(param.getValue().getValue().getCreationTime(true)));
+        newTypeColumn.setCellValueFactory((TreeTableColumn.CellDataFeatures<FileData, String> param) ->
+                new ReadOnlyStringWrapper(param.getValue().getValue().getType()));
+
+        newTreeTableView.getColumns().addAll(newNameColumn, newTypeColumn, newSizeColumn,
+                newOwnerColumn, newCreationTimeColumn, newLastModifiedTimeColumn);
+
+
+        sortByOwner_MenuItem.disableProperty().bind(newOwnerColumn.visibleProperty().not());
+        sortByCreationTime_MenuItem.disableProperty().bind(newCreationTimeColumn.visibleProperty().not());
+        sortByLastModifiedTime_MenuItem.disableProperty().bind(newLastModifiedTimeColumn.visibleProperty().not());
+
+        newTreeTableView.setTableMenuButtonVisible(true);
+        newTreeTableView.setRoot(new TreeItem<>(new FileData("Root", 8192)));
+        newTreeTableView.setShowRoot(false);
+        newTreeTableView.getSortOrder().addAll(newNameColumn, newTypeColumn);
+
+        newTab.setContent(newTreeTableView);
+        content_TabPane.getTabs().add(newTab);
+
+        //Каждая открытая вкладка наследует путь от текущей
+        if (currentPath.size() > 0 &&
+                currentPath.get(currentContentTabIndex) != null)
+        {
+            currentPath.add(currentPath.get(currentContentTabIndex));
+
+            if (currentPath.get(currentContentTabIndex + 1).getFileName() != null)
+            {
+                newTab.setText(currentPath.get(currentContentTabIndex).getFileName().toString());
+            }
+            else
+            {
+                newTab.setText(currentPath.get(currentContentTabIndex).toAbsolutePath().toString());
+            }
+        }
+
+    }
+
+    /**
+     * Находит и возвращает столбец по имени параметра ID. Поиск производится в активной
+     * таблице за счет переменной activatedTreeTableView.
+     */
+    private CustomTreeTableColumn<FileData, String> findColumnByStringID(final String id)
+    {
+        Iterator<TreeTableColumn<FileData, ?>> iterator = activatedTreeTableView.getColumns().iterator();
+        CustomTreeTableColumn<FileData, String> temporaryCustomColumn = null;
+
+        while (iterator.hasNext())
+        {
+            temporaryCustomColumn = (CustomTreeTableColumn<FileData, String>) iterator.next();
+            if (temporaryCustomColumn.getId().contains(id))
+            {
+                return temporaryCustomColumn;
+            }
+        }
+        return null;
+    }
+
+
+    private void goToPreviousTab_Action(ActionEvent event)
+    {
+        if (content_TabPane.getTabs().size() <= 1
+                || currentContentTabIndex < 1)
+        {
+            return;
+        }
+        content_TabPane.getSelectionModel().select(--currentContentTabIndex);
+    }
+
+    private void goToNextTab_Action(ActionEvent event)
+    {
+        if (content_TabPane.getTabs().size() <= 1
+                || currentContentTabIndex >= content_TabPane.getTabs().size() - 1)
+        {
+            return;
+        }
+        content_TabPane.getSelectionModel().select(++currentContentTabIndex);
     }
 }
 

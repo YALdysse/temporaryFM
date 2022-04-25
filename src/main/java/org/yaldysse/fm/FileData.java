@@ -148,6 +148,15 @@ public class FileData
         return creationTime;
     }
 
+    public String getCreationTime(boolean string)
+    {
+        if(creationTime==null)
+        {
+            return "";
+        }
+        return creationTime.toString();
+    }
+
     public String getType()
     {
         if (hasDirectory)
