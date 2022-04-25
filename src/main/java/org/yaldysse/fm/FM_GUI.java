@@ -699,6 +699,11 @@ public class FM_GUI extends Application
             }
             return false;
         }
+        if(Files.isRegularFile(destinationPath  ))
+        {
+            System.out.println("Переход отменен. Это файл!");
+            return false;
+        }
 
 
         if (!activatedTreeTableView.isTableMenuButtonVisible())
