@@ -6,7 +6,7 @@
 
     <groupId>org.yaldysse.fm</groupId>
     <artifactId>PsevdoFM</artifactId>
-    <version>build_4</version>
+    <version>build_6</version>
 
 <!--    <properties>-->
 <!--        <maven.compiler.release>17</maven.compiler.release>-->
@@ -72,6 +72,11 @@
             <version>3.2.1</version>
         </dependency>
 
+        <dependency>
+            <groupId>org.yaldysse</groupId>
+            <artifactId>YALdysse_Tools</artifactId>
+            <version>SNAPSHOT 12</version>
+        </dependency>
 
     </dependencies>
 
@@ -124,6 +129,28 @@
                     <source>17</source>
                     <target>17</target>
                 </configuration>
+            </plugin>
+
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>3.2.4</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                        <configuration>
+                            <artifactSet>
+                                <includes>
+                                    <include>org.yaldysse:YALdysse_Tools</include>
+                                </includes>
+                            </artifactSet>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
 
         </plugins>

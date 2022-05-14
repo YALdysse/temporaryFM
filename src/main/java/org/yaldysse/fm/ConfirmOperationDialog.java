@@ -231,7 +231,7 @@ public class ConfirmOperationDialog extends Stage
     {
         if (policy && info_ScrollPane.getOnKeyPressed() == null)
         {
-            info_ScrollPane.setOnKeyPressed(event ->
+            info_ScrollPane.setOnKeyReleased(event ->
             {
                 if (event.getCode() == KeyCode.ENTER)
                 {
@@ -275,5 +275,5 @@ public class ConfirmOperationDialog extends Stage
 
 enum ConfirmDialogButtonType
 {
-    CANCEL, OK, REPLACE_FILE, SKIP, UNITE;
+    CANCEL, OK, REPLACE_FILE, SKIP, UNITE, UNITE_ALL;
 }

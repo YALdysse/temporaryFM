@@ -3,12 +3,11 @@ package org.yaldysse.fm;
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
 import javafx.application.Application;
+import javafx.application.Platform;
 import javafx.beans.property.ReadOnlyObjectWrapper;
 import javafx.beans.property.ReadOnlyStringWrapper;
-import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
 import javafx.event.ActionEvent;
-import javafx.event.Event;
 import javafx.event.EventHandler;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -16,6 +15,8 @@ import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.control.skin.TableColumnHeader;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
 import javafx.scene.input.*;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
@@ -28,21 +29,28 @@ import javafx.stage.StageStyle;
 import javafx.stage.Window;
 import javafx.util.Callback;
 import javafx.util.Duration;
+import org.yaldysse.tools.Shell;
 
-import javax.swing.plaf.ColorUIResource;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.*;
 import java.nio.file.attribute.*;
 import java.time.*;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 
 /**
- * Ошибки: Если открыть новую вкладку, вернуться на предыдууще, перейти в корень, а
+ * Нужно сделать:
+ * 1 [Ошибка]: Если открыть новую вкладку, вернуться на предыдущие, перейти в корень, а
  * потом на следующую вкладку, то будет сгенерировать исключительная ситуация.
+ * 3 [Функционал]: Редактор аттрибутов.
+ * 4 [Функционал]: Авто обновление таблицы файлов.
+ * 5 [Функционал]: Реализовать возврат предыдущего выделения при переходе в родительский каталог,
+ * но только на один уровень.
+ * 6 [Функционал]: Не правильная сортировка по размеру из-за типа данных String.
  */
 public class FM_GUI extends Application
 {
@@ -55,14 +63,13 @@ public class FM_GUI extends Application
     private TreeTableCell<FileData, String> treeTableCell;
     private TreeItem<FileData> rootItem;
     private ContextMenu contextMenuForColums;
-    private ArrayList<TreeTableColumn> allColumns;
     private TabPane content_TabPane;
     private TreeTableView<FileData> activatedTreeTableView;
     /**
      * Будет хранить ссылку на столбец с типом для выбранной таблицы
      */
     private CustomTreeTableColumn<FileData, String> currentNameColumn;
-    private CustomTreeTableColumn<FileData, Long> currentSizeColumn;
+    private CustomTreeTableColumn<FileData, String> currentSizeColumn;
     private CustomTreeTableColumn<FileData, String> currentTypeColumn;
     private CustomTreeTableColumn<FileData, String> currentCreationTimeColumn;
     private CustomTreeTableColumn<FileData, String> currentOwnerColumn;
@@ -79,6 +86,9 @@ public class FM_GUI extends Application
     private CustomTreeTableColumn<FileData, ?> lastActiveSortColumn;
     private boolean filesToMoveFromClipboard = false;
     private int currentContentTabIndex;
+    private int previousSelectedFileIndex;
+    private DateTimeFormatter dateTimeIsoFormatter;
+    private double fileIconHeight;
 
     private MenuBar menu_Bar;
     private Menu file_Menu;
@@ -116,6 +126,8 @@ public class FM_GUI extends Application
     private MenuItem createNewTab_MenuItem;
     private MenuItem goToPreviousTab_MenuItem;
     private MenuItem goToNextTab_MenuItem;
+    private MenuItem showOrEditAttributes_MenuItem;
+    private MenuItem openTerminalHere_MenuItem;
 
     private CheckMenuItem autoSizeColumn_MenuItem;
 
@@ -127,6 +139,10 @@ public class FM_GUI extends Application
     public final String OWNER_COLUMN_ID = "OWNER";
     public final String CREATION_TIME_COLUMN_ID = "CREATION_TIME";
     public final String LAST_MODIFIED_TIME_COLUMN_ID = "LAST_MODIFIED_TIME";
+
+    private Font cellFont;
+    private Image folderIcon_Image;
+    private Image fileIcon_Image;
 
     @Override
     public void start(Stage primaryStage) throws Exception
@@ -148,6 +164,8 @@ public class FM_GUI extends Application
 
     private void initializeComponents()
     {
+        dateTimeIsoFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd, HH:mm:ss");
+        loadResources();
         initializeGeneral();
         initializeMenu();
         initializeContextMenuForColumns();
@@ -194,9 +212,13 @@ public class FM_GUI extends Application
         createNewTab_MenuItem.setOnAction(this::createNewTab_Action);
         createNewTab_MenuItem.setDisable(true);
 
+        openTerminalHere_MenuItem = new MenuItem("Open Terminal here");
+        openTerminalHere_MenuItem.setAccelerator(new KeyCodeCombination(KeyCode.E, KeyCombination.CONTROL_DOWN));
+        openTerminalHere_MenuItem.setOnAction(this::addActionToOpenTerminalMenuItem);
+
         file_Menu = new Menu("Main");
         file_Menu.getItems().addAll(createNewTab_MenuItem, copyFileName_MenuItem, copyAbsoluteNamePath_MenuItem,
-                new SeparatorMenuItem(), exit_MenuItem);
+                openTerminalHere_MenuItem,new SeparatorMenuItem(), exit_MenuItem);
 
         goToParent_MenuItem = new MenuItem("Parent directory");
         goToParent_MenuItem.setOnAction(event -> goToParentPath(currentPath.get(currentContentTabIndex)));
@@ -367,7 +389,12 @@ public class FM_GUI extends Application
             filesToMoveFromClipboard = true;
         });
 
-        edit_Menu.getItems().addAll(createFile_MenuItem, createDirectory_MenuItem,
+        showOrEditAttributes_MenuItem = new MenuItem("Attributes");
+        showOrEditAttributes_MenuItem.setAccelerator(new KeyCodeCombination(KeyCode.F4));
+        showOrEditAttributes_MenuItem.setOnAction(this::showOrEditAttributes_Action);
+
+        edit_Menu.getItems().addAll(showOrEditAttributes_MenuItem, new SeparatorMenuItem(),
+                createFile_MenuItem, createDirectory_MenuItem,
                 new SeparatorMenuItem(), copy_MenuItem, move_MenuItem, paste_MenuItem,
                 new SeparatorMenuItem(), rename_MenuItem, delete_MenuItem);
 
@@ -379,13 +406,15 @@ public class FM_GUI extends Application
 
     private void initializeGeneral()
     {
+        fileIconHeight = 20.0D;
+
         CustomTreeTableColumn<FileData, String> nameColumn = new CustomTreeTableColumn<>("Name");
         nameColumn.setMinWidth(preferredWidth * 0.1D);
         nameColumn.setPrefWidth(preferredWidth * 0.5D);
         nameColumn.setSortable(false);
         nameColumn.setId(NAME_COLUMN_ID);
 
-        CustomTreeTableColumn<FileData, Long> sizeColumn = new CustomTreeTableColumn<>("Size");
+        CustomTreeTableColumn<FileData, String> sizeColumn = new CustomTreeTableColumn<>("Size");
         sizeColumn.setMinWidth(preferredWidth * 0.05D);
         sizeColumn.setPrefWidth(preferredWidth * 0.1D);
         sizeColumn.setSortable(false);
@@ -473,14 +502,14 @@ public class FM_GUI extends Application
 
         nameColumn.setCellValueFactory((TreeTableColumn.CellDataFeatures<FileData, String> param) ->
                 new ReadOnlyStringWrapper(param.getValue().getValue().getName()));
-        sizeColumn.setCellValueFactory((TreeTableColumn.CellDataFeatures<FileData, Long> param) ->
-                new ReadOnlyObjectWrapper<>(param.getValue().getValue().getSize()));
+        sizeColumn.setCellValueFactory((TreeTableColumn.CellDataFeatures<FileData, String> param) ->
+                new ReadOnlyStringWrapper(param.getValue().getValue().getSize(true)));
         ownerColumn.setCellValueFactory((TreeTableColumn.CellDataFeatures<FileData, String> param) ->
                 new ReadOnlyStringWrapper(param.getValue().getValue().getOwner()));
         lastModifiedTimeColumn.setCellValueFactory((TreeTableColumn.CellDataFeatures<FileData, String> param) ->
-                new ReadOnlyStringWrapper(param.getValue().getValue().getLastModifiedTime(true)));
+                new ReadOnlyStringWrapper(param.getValue().getValue().getLastModifiedTime(dateTimeIsoFormatter)));
         creationTimeColumn.setCellValueFactory((TreeTableColumn.CellDataFeatures<FileData, String> param) ->
-                new ReadOnlyStringWrapper(param.getValue().getValue().getCreationTime(true)));
+                new ReadOnlyStringWrapper(param.getValue().getValue().getCreationTime(dateTimeIsoFormatter)));
         typeColumn.setCellValueFactory((TreeTableColumn.CellDataFeatures<FileData, String> param) ->
                 new ReadOnlyStringWrapper(param.getValue().getValue().getType()));
 
@@ -526,6 +555,7 @@ public class FM_GUI extends Application
             }
         };
 
+
         nameColumn.setCellFactory(new Callback<TreeTableColumn<FileData, String>, TreeTableCell<FileData, String>>()
         {
             @Override
@@ -533,6 +563,8 @@ public class FM_GUI extends Application
             {
                 CustomTreeTableCell<FileData, String> temporaryCell = new CustomTreeTableCell<>();
                 //temporaryCell.setTextFill(Color.LIGHTSKYBLUE);
+                //temporaryCell.setFont(cellFont);
+                temporaryCell.setPadding(new Insets(0.0D, 0.0D, 0.0, rem * 0.2D));
                 temporaryCell.setOnMouseClicked(mouseClickEvent);
                 return temporaryCell;
             }
@@ -551,6 +583,7 @@ public class FM_GUI extends Application
                 goToPath(newPath);
             }
         });
+        //currentPath_TextField.setFocusTraversable(false);
 
         Tab main_Tab = new Tab();
         main_Tab.setContent(content_TreeTableView);
@@ -559,6 +592,8 @@ public class FM_GUI extends Application
         currentContentTabIndex = 0;
 
         content_TabPane = new TabPane(main_Tab);
+        content_TabPane.setPadding(new Insets(rem * 0.15D));
+        content_TabPane.setBorder(new Border(new BorderStroke(Color.BLACK, BorderStrokeStyle.SOLID, CornerRadii.EMPTY, BorderStroke.THIN)));
         content_TabPane.getSelectionModel().selectedItemProperty().addListener(event ->
         {
             System.out.println("Вкладка изменена. Текущий индекс: "
@@ -576,7 +611,12 @@ public class FM_GUI extends Application
             goToPath(currentPath.get(currentContentTabIndex));
 
             System.out.println("Запрос на фоку.");
-            currentPath_TextField.requestFocus();
+//            activatedTreeTableView.requestFocus();
+
+            Platform.runLater(() ->
+            {
+                activatedTreeTableView.requestFocus();
+            });
         });
 
         currentPath = new ArrayList<>();
@@ -659,6 +699,18 @@ public class FM_GUI extends Application
         activatedTreeTableView.setContextMenu(contextMenuForFiles);
     }
 
+    private void loadResources()
+    {
+        long startTime = System.currentTimeMillis();
+        cellFont = Font.loadFont(FM_GUI.class.getResourceAsStream("/Fonts/Leto Text Sans Defect.otf"), 14.0D);
+
+        folderIcon_Image = new Image(FM_GUI.class.getResourceAsStream("/Images/folder.png"));
+        fileIcon_Image = new Image(FM_GUI.class.getResourceAsStream("/Images/file.png"));
+
+
+        System.out.println("На загрузку ресурсов потрачено: " + (System.currentTimeMillis() - startTime));
+    }
+
     private void contextMenuForColumns_Action(ActionEvent event)
     {
         TableColumnHeader tableColumnHeader = (TableColumnHeader) contextMenuForColums.getOwnerNode();
@@ -699,12 +751,11 @@ public class FM_GUI extends Application
             }
             return false;
         }
-        if(Files.isRegularFile(destinationPath  ))
+        if (Files.isRegularFile(destinationPath))
         {
             System.out.println("Переход отменен. Это файл!");
             return false;
         }
-
 
         if (!activatedTreeTableView.isTableMenuButtonVisible())
         {
@@ -722,7 +773,6 @@ public class FM_GUI extends Application
         if (createNewTab_MenuItem.isDisable())
         {
             createNewTab_MenuItem.setDisable(false);
-
         }
 
         //Скорее всего из-за обращения к корневому каталогу /
@@ -783,7 +833,18 @@ public class FM_GUI extends Application
                     temporaryFileData.setFile(Files.isRegularFile(temporaryPath));
                     temporaryFileData.setSymbolicLink(Files.isSymbolicLink(temporaryPath));
 
-                    currentRootItem.getChildren().add(new TreeItem<>(temporaryFileData));
+
+                    TreeItem<FileData> temporaryTreeItem = new TreeItem<>(temporaryFileData);
+                    if (temporaryFileData.isDirectory())
+                    {
+                        applyIconForTreeItem(temporaryTreeItem, folderIcon_Image, fileIconHeight);
+                    }
+                    if (temporaryFileData.isFile())
+                    {
+                        applyIconForTreeItem(temporaryTreeItem, fileIcon_Image, fileIconHeight);
+                    }
+
+                    currentRootItem.getChildren().add(temporaryTreeItem);
                 }
                 catch (IOException ioException)
                 {
@@ -792,7 +853,6 @@ public class FM_GUI extends Application
             }
 
         }
-        System.out.println("Прошло времени: " + (System.currentTimeMillis() - startTime));
         if (activatedTreeTableView.getExpandedItemCount() != 0)
         {
             activatedTreeTableView.getSelectionModel().clearSelection();
@@ -806,6 +866,7 @@ public class FM_GUI extends Application
             activatedTreeTableView.getSelectionModel().clearSelection();
             activatedTreeTableView.getSelectionModel().select(0);
         }
+        System.out.println("updateFilesContent duration: " + (System.currentTimeMillis() - startTime));
         return true;
     }
 
@@ -819,7 +880,16 @@ public class FM_GUI extends Application
             return false;
         }
 
-        return goToPath(path.getParent());
+        if (goToPath(path.getParent()))
+        {
+            activatedTreeTableView.getSelectionModel().clearSelection();
+            activatedTreeTableView.getSelectionModel().select(previousSelectedFileIndex);
+            activatedTreeTableView.scrollTo(previousSelectedFileIndex - 2);
+            previousSelectedFileIndex = 0;
+            return true;
+        }
+        return false;
+        //return goToPath(path.getParent());
     }
 
     /**
@@ -846,6 +916,8 @@ public class FM_GUI extends Application
 
         if (keyRelease_KeyCode == KeyCode.ENTER)
         {
+            previousSelectedFileIndex = activatedTreeTableView.getSelectionModel().getSelectedIndex();
+
             if (currentPath.size() != 0 &&
                     currentPath.get(currentContentTabIndex) != null)
             {
@@ -870,30 +942,7 @@ public class FM_GUI extends Application
         {
             goToNextTab_MenuItem.fire();
         }
-//        if (event.getCode() == KeyCode.F2)
-//        {
-//            System.out.println("pizdes");
-//            FileTime time = FileTime.fromMillis(35883295833L);
-//            try
-//            {
-//                Path path = currentPath.resolve(content_TreeTableView.getSelectionModel().getSelectedItem()
-//                        .getValue().getName());
-//                FileTime timeFile = Files.readAttributes(currentPath.resolve(".dir_colors"), BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS).creationTime();
-//                System.out.println(timeFile);
-//                Files.getFileAttributeView(path, BasicFileAttributeView.class).setTimes(time, time, time);
-//                System.out.println("Атрибуты должны быть установлеы.");
-//            }
-//            catch (IOException ioException)
-//            {
-//                ioException.printStackTrace();
-//            }
-//
-//        }
-//        else if(event.getCode() == KeyCode.HOME)
-//        {
-//            System.out.println("Запрос на авторазмер....");
-//            nameColumn.setAutoFitColumnWidthToData(false);
-//        }
+
     }
 
     /**
@@ -904,6 +953,8 @@ public class FM_GUI extends Application
         if (event.getButton() == MouseButton.PRIMARY &&
                 event.getClickCount() == 2)
         {
+            previousSelectedFileIndex = activatedTreeTableView.getSelectionModel().getSelectedIndex();
+
             if (currentPath.size() != 0 &&
                     currentPath.get(currentContentTabIndex) != null)
             {
@@ -992,9 +1043,7 @@ public class FM_GUI extends Application
         }
     }
 
-    /**
-     * @deprecated Не оптимизирован.
-     */
+
     private void delete_MenuItem_Action(ActionEvent eventDelete)
     {
         System.out.println("Запрос на удаление");
@@ -1043,10 +1092,9 @@ public class FM_GUI extends Application
 
                 }
 
-                //Обновляем плохим образом, ибо хорошим нету больше сил.
-                goToPath(currentPath.get(currentContentTabIndex));
-                //removeRowsFromTreeTableView(files_ObservableList);
-
+                removeSelectedRowsFromTreeTableView();
+                //26_606_006, 11_151_432, 10_097_724
+                //1_105_428, 1_021_908, 1_301_037
             }
             catch (IOException ioException)
             {
@@ -1055,14 +1103,15 @@ public class FM_GUI extends Application
         }
     }
 
+
     private boolean deleteFileRecursively(Path targetPath) throws IOException
     {
-        if (!Files.exists(targetPath))
+        if (!Files.exists(targetPath, LinkOption.NOFOLLOW_LINKS))
         {
             return false;
         }
 
-        if (Files.isRegularFile(targetPath))
+        if (Files.isRegularFile(targetPath, LinkOption.NOFOLLOW_LINKS) || Files.isSymbolicLink(targetPath))
         {
             Files.delete(targetPath);
         }
@@ -1089,35 +1138,16 @@ public class FM_GUI extends Application
     }
 
     /**
-     * @deprecated Работает не корректно.
-     */
-    private void removeRowsFromTreeTableView(ObservableList<TreeItem<FileData>> targetRows)
-    {
-
-        Iterator<TreeItem<FileData>> iterator = targetRows.iterator();
-        while (iterator.hasNext())
-        {
-            FileData temporaryItem = iterator.next().getValue();
-            String name = temporaryItem.getName();
-            System.out.println("Item: " + name);
-            System.out.println("size: " + root.getChildren().size());
-            activatedTreeTableView.getRoot().getChildren().remove(temporaryItem);
-        }
-    }
-
-    /**
      * Пока, только для одиночного переименования
      */
     private void rename_MenuItem_Action(ActionEvent event)
     {
-        System.out.println("Запрос на переименования");
-
         VBox fileName_VBox = new VBox(rem * 0.15D);
         fileName_VBox.setAlignment(Pos.CENTER);
 //        fileName_VBox.setBackground(new Background(new BackgroundFill(Color.LIGHTCYAN,
 //                CornerRadii.EMPTY, Insets.EMPTY)));
 
-        final Label fileAlreadyExists_Label = new Label("File with the same name already exists.");
+        Label fileAlreadyExists_Label = new Label("File with the same name already exists.");
         fileAlreadyExists_Label.setWrapText(true);
         fileAlreadyExists_Label.setVisible(false);
         fileAlreadyExists_Label.setTextFill(Color.LIGHTCORAL);
@@ -1129,7 +1159,8 @@ public class FM_GUI extends Application
         fileName_TextField.setPromptText("Enter new name here");
         fileName_TextField.setOnKeyReleased(eventFileName ->
         {
-            if (fileAlreadyExists_Label != null)
+            System.out.println("released");
+            if (fileAlreadyExists_Label != null && fileAlreadyExists_Label.isVisible())
             {
                 fileAlreadyExists_Label.setVisible(false);
             }
@@ -1163,19 +1194,32 @@ public class FM_GUI extends Application
             temporaryConfirmOperationButton.setBorder(new Border(new BorderStroke(Color.BLACK,
                     BorderStrokeStyle.SOLID, CornerRadii.EMPTY, BorderStroke.MEDIUM, Insets.EMPTY)));
         }
-        confirmOperationDialog.showAndWait();
-        System.out.println("Выбрана кнопка: " + confirmOperationDialog.getActivatedOperationButton().name());
 
-        if (confirmOperationDialog.getActivatedOperationButton() == ConfirmDialogButtonType.OK)
+        while (true)
         {
-            Path targetPath = null;
-            while (true)
+            confirmOperationDialog.showAndWait();
+            System.out.println("Выбрана кнопка: " + confirmOperationDialog.getActivatedOperationButton().name());
+
+            if (confirmOperationDialog.getActivatedOperationButton() == ConfirmDialogButtonType.OK)
             {
+                Path targetPath = null;
+
                 try
                 {
                     targetPath = currentPath.get(currentContentTabIndex).resolve(fileName_TextField.getText());
                     Path resultPath = Files.move(temporaryPath, targetPath);
 
+                    try
+                    {
+                        FileData temporaryData = activatedTreeTableView.getSelectionModel().getSelectedItem().getValue();
+                        temporaryData = temporaryData.cloneFileData();
+                        temporaryData.setName(targetPath.getFileName().toString());
+                        activatedTreeTableView.getSelectionModel().getSelectedItem().setValue(temporaryData);
+                    }
+                    catch (CloneNotSupportedException cloneNotSupportedException)
+                    {
+                        cloneNotSupportedException.printStackTrace();
+                    }
                     if (resultPath != null)
                     {
                         break;
@@ -1186,7 +1230,7 @@ public class FM_GUI extends Application
                     //fileAlreadyExistsException.printStackTrace();
                     System.out.println("Файл с таким именем уже существует.");
                     fileAlreadyExists_Label.setVisible(true);
-                    confirmOperationDialog.showAndWait();
+                    confirmOperationDialog.setContent(fileName_VBox);
                 }
                 catch (NoSuchFileException noSuchFileException)
                 {
@@ -1198,21 +1242,14 @@ public class FM_GUI extends Application
                 {
                     ioException.printStackTrace();
                 }
-            }
 
-            try
-            {
-                FileData temporaryData = activatedTreeTableView.getSelectionModel().getSelectedItem().getValue();
-                temporaryData = temporaryData.cloneFileData();
-                temporaryData.setName(targetPath.getFileName().toString());
-                activatedTreeTableView.getSelectionModel().getSelectedItem().setValue(temporaryData);
             }
-            catch (CloneNotSupportedException cloneNotSupportedException)
+            else if (confirmOperationDialog.getActivatedOperationButton() == ConfirmDialogButtonType.CANCEL)
             {
-                cloneNotSupportedException.printStackTrace();
+                break;
             }
-
         }
+
     }
 
     private void copyFileName_MenuItem_Action(ActionEvent event)
@@ -1222,7 +1259,7 @@ public class FM_GUI extends Application
         clipboardContent.putString(activatedTreeTableView.getSelectionModel().getSelectedItem().getValue().getName());
         if (Clipboard.getSystemClipboard().setContent(clipboardContent))
         {
-            showLittleNotification(stage, "Files has been successfully copied to clipboard.", 3);
+            showLittleNotification(stage, "Name of file has been successfully copied.", 3);
         }
     }
 
@@ -1411,7 +1448,7 @@ public class FM_GUI extends Application
 //                            }
 //                            else
 //                            {
-//                                System.out.println("Дата редактирования не может быть ранешь даты создания!");
+//                                System.out.println("Дата редактирования не может быть раньше даты создания!");
 //                                lastModifiedTime=creationTime;
 //                            }
 //                        }
@@ -1656,27 +1693,6 @@ public class FM_GUI extends Application
     }
 
 
-    /**
-     * @deprecated Сомнительная реализация и польза.
-     */
-    private EditableBasicFileAttributes createCustomFileAttributes(boolean hasFile, boolean hasDirectory,
-                                                                   boolean hasOther, boolean hasSymbolicLink,
-                                                                   DatePicker creationData_datePicker)
-    {
-        EditableBasicFileAttributes editableBasicFileAttributes = new EditableBasicFileAttributes();
-        editableBasicFileAttributes.setHasFile(hasFile);
-        editableBasicFileAttributes.setHasDirectory(hasDirectory);
-        editableBasicFileAttributes.setHasOther(hasOther);
-        editableBasicFileAttributes.setHasSymbolicLink(hasSymbolicLink);
-
-        LocalDate localDate = creationData_datePicker.getValue();
-        LocalDateTime creationDateTime = LocalDateTime.of(localDate, LocalTime.now());
-
-        editableBasicFileAttributes.setCreationTime(FileTime.from(creationDateTime.toInstant(ZoneOffset.UTC)));
-        System.out.println("CrationTime: " + editableBasicFileAttributes.creationTime());
-        return editableBasicFileAttributes;
-    }
-
     private void pasteFiles_MenuItem_Action(ActionEvent event)
     {
         List<File> filesToPaste_List = Clipboard.getSystemClipboard().getFiles();
@@ -1689,7 +1705,8 @@ public class FM_GUI extends Application
                     {
                         Path temporarySourcePath = null;
                         Path temporaryTargetPath = null;
-                        boolean uniteDirectories = false;
+                        boolean uniteDirectoryAndReplaceFileOnce = false;
+                        boolean uniteDirectoriesAndReplaceAllFiles = false;
 
                         try
                         {
@@ -1700,29 +1717,44 @@ public class FM_GUI extends Application
                             }
                             else if (lastActivatedConfirmButtonType == ConfirmDialogButtonType.UNITE)
                             {
-                                uniteDirectories = true;
+                                uniteDirectoryAndReplaceFileOnce = true;
+                            }
+                            else if (lastActivatedConfirmButtonType == ConfirmDialogButtonType.UNITE_ALL)
+                            {
+                                uniteDirectoriesAndReplaceAllFiles = true;
+                                uniteDirectoryAndReplaceFileOnce = true;
                             }
 
 
-                            for (int k = countSuccessfullyCopiedFiles; k < filesToPaste_List.size(); k++)
                             {
-                                temporarySourcePath = filesToPaste_List.get(k).toPath();
-                                temporaryTargetPath = currentPath.get(currentContentTabIndex).resolve(temporarySourcePath.getFileName());
-                                //System.out.println("source: " + temporarySourcePath.toAbsolutePath().toString());
-                                //System.out.println("target: " + temporaryTargetPath.toAbsolutePath().toString());
-
-                                if (copyFileRecursively(temporarySourcePath, temporaryTargetPath,
-                                        uniteDirectories))
+                                for (int k = countSuccessfullyCopiedFiles; k < filesToPaste_List.size(); k++)
                                 {
-                                    System.out.println("Рекурсивное копирование завершено.");
-                                }
-                                if (filesToMoveFromClipboard)
-                                {
-                                    deleteFileRecursively(temporarySourcePath);
-                                }
+                                    temporarySourcePath = filesToPaste_List.get(k).toPath();
+                                    temporaryTargetPath = currentPath.get(currentContentTabIndex).resolve(temporarySourcePath.getFileName());
+                                    //System.out.println("source: " + temporarySourcePath.toAbsolutePath().toString());
+                                    //System.out.println("target: " + temporaryTargetPath.toAbsolutePath().toString());
 
-                                countSuccessfullyCopiedFiles++;
-                                uniteDirectories = false;
+                                    if (copyFileRecursively(temporarySourcePath, temporaryTargetPath,
+                                            uniteDirectoryAndReplaceFileOnce))
+                                    {
+                                        System.out.println("Рекурсивное копирование завершено.");
+                                        addRowToTreeTable(temporaryTargetPath);
+                                    }
+                                    if (filesToMoveFromClipboard)
+                                    {
+                                        deleteFileRecursively(temporarySourcePath);
+                                    }
+
+                                    countSuccessfullyCopiedFiles++;
+                                    if (!uniteDirectoriesAndReplaceAllFiles)
+                                    {
+                                        uniteDirectoryAndReplaceFileOnce = false;
+                                    }
+                                    else
+                                    {
+                                        uniteDirectoryAndReplaceFileOnce = true;
+                                    }
+                                }
                             }
                         }
                         catch (FileAlreadyExistsException fileAlreadyExistsException)
@@ -1765,13 +1797,13 @@ public class FM_GUI extends Application
 
                             fileName_VBox.getChildren().addAll(targetPath_Label);
 
-                            confirmOperationDialog.setTitle("Copy");
+                            confirmOperationDialog.setTitle("File already exists");
                             confirmOperationDialog.setHeaderText("Copy");
                             confirmOperationDialog.setHeaderColor(Color.GREEN);
                             confirmOperationDialog.setMessageText("File with same name already exists in this directory. What would yo like do ?");
                             confirmOperationDialog.setMessageTextColor(Color.BLACK);
                             confirmOperationDialog.setMessageTextFont(Font.font(Font.getDefault().getName(), FontWeight.BOLD, 13.0D));
-                            confirmOperationDialog.setOperationButtons(ConfirmDialogButtonType.CANCEL, ConfirmDialogButtonType.UNITE, ConfirmDialogButtonType.SKIP);
+                            confirmOperationDialog.setOperationButtons(ConfirmDialogButtonType.CANCEL, ConfirmDialogButtonType.UNITE, ConfirmDialogButtonType.UNITE_ALL, ConfirmDialogButtonType.SKIP);
                             ConfirmOperationButton confirmButton = (ConfirmOperationButton) confirmOperationDialog.getOperationButtons().get(1);
                             confirmButton.setText("Unite");
                             confirmOperationDialog.setContent(fileName_VBox);
@@ -1790,7 +1822,7 @@ public class FM_GUI extends Application
                         {
                             System.out.println("Каталог не пуст.");
                             lastActivatedConfirmButtonType = ConfirmDialogButtonType.UNITE;
-                            uniteDirectories = true;
+                            uniteDirectoryAndReplaceFileOnce = true;
                         }
                         catch (IOException ioException)
                         {
@@ -1799,14 +1831,14 @@ public class FM_GUI extends Application
                         }
                         if (countSuccessfullyCopiedFiles == filesToPaste_List.size())
                         {
-                            String message = "Files have benn successfully copied.";
+                            String message = "Files have been successfully copied.";
                             if (filesToMoveFromClipboard)
                             {
                                 message = "Files have been successfully moved.";
                             }
 
                             showLittleNotification(stage, message, 3);
-                            goToPath(currentPath.get(currentContentTabIndex));
+                            //goToPath(currentPath.get(currentContentTabIndex));
                             break;
                         }
                     }
@@ -1871,40 +1903,52 @@ public class FM_GUI extends Application
 
     /**
      * Добавляет новую строку в таблицу файлов. При этом в объект модели
-     * данных записываются только те данные, для которых отображены соответсвующие
-     * колонки. Сортирование при этом не происходит.
+     * данных записываются только те данные, для которых отображены соответствующие
+     * колонки. После добавления запрашивается сортировка.
      */
     private void addRowToTreeTable(Path targetPath)
     {
-        FileData newFileDate = new FileData(targetPath.getFileName().toString(),
+        FileData newFileData = new FileData(targetPath.getFileName().toString(),
                 -1);
 
         try
         {
             BasicFileAttributes basicFileAttributes = Files.readAttributes(targetPath, BasicFileAttributes.class);
-            newFileDate.setSize(basicFileAttributes.size());
-            newFileDate.setFile(basicFileAttributes.isRegularFile());
-            newFileDate.setSymbolicLink(basicFileAttributes.isSymbolicLink());
-            newFileDate.setDirectory(basicFileAttributes.isDirectory());
+            newFileData.setSize(basicFileAttributes.size());
+            newFileData.setFile(basicFileAttributes.isRegularFile());
+            newFileData.setSymbolicLink(basicFileAttributes.isSymbolicLink());
+            newFileData.setDirectory(basicFileAttributes.isDirectory());
 
             if (currentCreationTimeColumn.isVisible())
             {
-                newFileDate.setCreationTime(basicFileAttributes.creationTime());
+                newFileData.setCreationTime(basicFileAttributes.creationTime());
             }
             if (currentLastModifiedTimeColumn.isVisible())
             {
-                newFileDate.setLastModifiedTime(basicFileAttributes.lastModifiedTime());
+                newFileData.setLastModifiedTime(basicFileAttributes.lastModifiedTime());
             }
             if (currentOwnerColumn.isVisible())
             {
-                newFileDate.setOwner(Files.getOwner(targetPath, LinkOption.NOFOLLOW_LINKS).getName());
+                newFileData.setOwner(Files.getOwner(targetPath, LinkOption.NOFOLLOW_LINKS).getName());
             }
-            activatedTreeTableView.getRoot().getChildren().add(new TreeItem<>(newFileDate));
+
+            TreeItem<FileData> temporaryTreeItem = new TreeItem<>(newFileData);
+            if (newFileData.isDirectory())
+            {
+                applyIconForTreeItem(temporaryTreeItem, folderIcon_Image, fileIconHeight);
+            }
+            else if (newFileData.isFile())
+            {
+                applyIconForTreeItem(temporaryTreeItem, fileIcon_Image, fileIconHeight);
+            }
+
+            activatedTreeTableView.getRoot().getChildren().add(temporaryTreeItem);
         }
         catch (IOException ioException)
         {
             ioException.printStackTrace();
         }
+        requestSort(lastActiveSortColumn, currentTypeColumn);
     }
 
     private void copyFilesToClipboard_MenuItem_Action(ActionEvent event)
@@ -1956,7 +2000,7 @@ public class FM_GUI extends Application
     /**
      * Отображает всплывающую подсказку - небольшое уведомление.
      */
-    private void showLittleNotification(Window window, String message, final int DurationInSeconds)
+    public static void showLittleNotification(Window window, String message, final int DurationInSeconds)
     {
         Tooltip tooltip = new Tooltip(message);
         tooltip.setWrapText(true);
@@ -1973,8 +2017,8 @@ public class FM_GUI extends Application
             timeline.play();
         });
         Text temporaryText = new Text(tooltip.getText());
-        tooltip.show(stage, (stage.getX() + stage.getWidth() / 2.0D) -
-                temporaryText.getBoundsInParent().getWidth() / 2.0D, stage.getY() + stage.getHeight() / 2);
+        tooltip.show(window, (window.getX() + window.getWidth() / 2.0D) -
+                temporaryText.getBoundsInParent().getWidth() / 2.0D, window.getY() + window.getHeight() / 2);
     }
 
     private void createNewTab_Action(ActionEvent event)
@@ -2107,9 +2151,9 @@ public class FM_GUI extends Application
         newOwnerColumn.setCellValueFactory((TreeTableColumn.CellDataFeatures<FileData, String> param) ->
                 new ReadOnlyStringWrapper(param.getValue().getValue().getOwner()));
         newLastModifiedTimeColumn.setCellValueFactory((TreeTableColumn.CellDataFeatures<FileData, String> param) ->
-                new ReadOnlyStringWrapper(param.getValue().getValue().getLastModifiedTime(true)));
+                new ReadOnlyStringWrapper(param.getValue().getValue().getLastModifiedTime(dateTimeIsoFormatter)));
         newCreationTimeColumn.setCellValueFactory((TreeTableColumn.CellDataFeatures<FileData, String> param) ->
-                new ReadOnlyStringWrapper(param.getValue().getValue().getCreationTime(true)));
+                new ReadOnlyStringWrapper(param.getValue().getValue().getCreationTime(dateTimeIsoFormatter)));
         newTypeColumn.setCellValueFactory((TreeTableColumn.CellDataFeatures<FileData, String> param) ->
                 new ReadOnlyStringWrapper(param.getValue().getValue().getType()));
 
@@ -2186,6 +2230,78 @@ public class FM_GUI extends Application
             return;
         }
         content_TabPane.getSelectionModel().select(++currentContentTabIndex);
+    }
+
+    private void applyIconForTreeItem(TreeItem<?> treeItem, final Image icon, final double size)
+    {
+        ImageView temporaryIcon = new ImageView(icon);
+        temporaryIcon.setPreserveRatio(true);
+        temporaryIcon.setFitHeight(size);
+        temporaryIcon.setSmooth(true);
+        treeItem.setGraphic(temporaryIcon);
+
+    }
+
+    private void removeSelectedRowsFromTreeTableView()
+    {
+        ObservableList<Integer> indices = activatedTreeTableView.getSelectionModel().getSelectedIndices();
+        Object[] indicesArray = indices.toArray();
+        TreeItem<FileData> temporaryRoot = activatedTreeTableView.getRoot();
+        int indexToRemoving = -1;
+        for (int k = 0, offset = 0; k < indicesArray.length; k++)
+        {
+            temporaryRoot.getChildren().remove((int) indicesArray[k] - offset);
+            offset++;
+        }
+    }
+
+    private void showOrEditAttributes_Action(ActionEvent event)
+    {
+        Path temporaryPath = currentPath.get(currentContentTabIndex).resolve(activatedTreeTableView.getSelectionModel().getSelectedItem().getValue().getName());
+
+        FileAttributesEditor fae = new FileAttributesEditor(temporaryPath);
+        fae.show();
+    }
+
+    private void addActionToOpenTerminalMenuItem(ActionEvent event)
+    {
+        String osName = System.getProperty("os.name");
+        ProcessBuilder terminalProcessBuilder = null;
+
+        try
+        {
+            if (osName.contains("Linux"))
+            {
+                terminalProcessBuilder = new ProcessBuilder(Shell.getTerminalEmulatorName());
+
+            }
+            else if (osName.contains("Windows"))
+            {
+
+                terminalProcessBuilder = new ProcessBuilder(Shell.getTerminalEmulatorName(), "/K", "start");
+            }
+        }
+        catch (InterruptedException interruptedException)
+        {
+            interruptedException.printStackTrace();
+        }
+
+
+        try
+        {
+            terminalProcessBuilder.directory(currentPath.get(currentContentTabIndex).toFile());
+            Process process = terminalProcessBuilder.start();
+            //process.waitFor();
+            //process.destroy();
+        }
+        catch (IOException ioException)
+        {
+            ioException.printStackTrace();
+        }
+//        catch (InterruptedException InterruptedException)
+//        {
+//            InterruptedException.printStackTrace();
+//        }
     }
 }
 

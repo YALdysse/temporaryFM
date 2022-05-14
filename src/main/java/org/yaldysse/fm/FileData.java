@@ -1,7 +1,13 @@
 package org.yaldysse.fm;
 
+import org.yaldysse.tools.StorageCapacity;
+
 import java.io.File;
 import java.nio.file.attribute.FileTime;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.concurrent.TimeUnit;
 
@@ -12,6 +18,7 @@ public class FileData
 {
     private String name;
     private long size;
+    private StorageCapacity size_StorageCapacity;
     private String owner;
     private FileTime lastModifiedTime;
     private FileTime creationTime;
@@ -23,6 +30,7 @@ public class FileData
     {
         name = aName;
         size = aSize;
+        size_StorageCapacity = StorageCapacity.ofBytes(aSize);
 
         if (aName == null)
         {
@@ -34,6 +42,7 @@ public class FileData
     {
         name = aName;
         size = aSize;
+        size_StorageCapacity = StorageCapacity.ofBytes(aSize);
         owner = aOwner;
 
         if (aName == null)
@@ -47,7 +56,6 @@ public class FileData
     }
 
 
-
     public void setName(String newName)
     {
         name = newName;
@@ -58,6 +66,7 @@ public class FileData
         if (newSize >= 0L)
         {
             size = newSize;
+            size_StorageCapacity = StorageCapacity.ofBytes(newSize);
         }
     }
 
@@ -113,6 +122,15 @@ public class FileData
         return size;
     }
 
+    public String getSize(boolean value)
+    {
+        if(size_StorageCapacity==null)
+        {
+            return "";
+        }
+        return size_StorageCapacity.toString();
+    }
+
     public String getOwner()
     {
         return owner;
@@ -134,13 +152,16 @@ public class FileData
         //return lastModifiedTime.to(timeUnit);
     }
 
-    public String getLastModifiedTime(boolean string)
+    /**Возвращает дату и время последнего изменения в заданном формате.*/
+    public String getLastModifiedTime(DateTimeFormatter formatter)
     {
         if (lastModifiedTime == null)
         {
             return "";
         }
-        return lastModifiedTime.toString();
+
+        LocalDateTime lastModifiedTime_LocalDateTime = LocalDateTime.ofInstant(lastModifiedTime.toInstant(), ZoneId.systemDefault());
+        return lastModifiedTime_LocalDateTime.format(formatter);
     }
 
     public FileTime getCreationTime()
@@ -148,13 +169,19 @@ public class FileData
         return creationTime;
     }
 
-    public String getCreationTime(boolean string)
+    /**
+     * Возвращает значение даты и времени создания файла в заданном формате.
+     */
+    public String getCreationTime(DateTimeFormatter formatter)
     {
-        if(creationTime==null)
+        if (creationTime == null)
         {
             return "";
         }
-        return creationTime.toString();
+
+        LocalDateTime creationTime_LocalDateTime = LocalDateTime.ofInstant(creationTime.toInstant(), ZoneId.systemDefault());
+        return creationTime_LocalDateTime.format(formatter);
+        //return creationTime.toString();
     }
 
     public String getType()
@@ -192,7 +219,7 @@ public class FileData
 
     public FileData cloneFileData() throws CloneNotSupportedException
     {
-        FileData temporaryFileData = new FileData(getName(),getSize() );
+        FileData temporaryFileData = new FileData(getName(), getSize());
         temporaryFileData.setOwner(getOwner());
         temporaryFileData.setCreationTime(getCreationTime());
         temporaryFileData.setLastModifiedTime(getLastModifiedTime());
