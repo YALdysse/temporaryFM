@@ -4,6 +4,7 @@ import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
 import javafx.application.Application;
 import javafx.application.Platform;
+import javafx.beans.property.ReadOnlyLongWrapper;
 import javafx.beans.property.ReadOnlyObjectWrapper;
 import javafx.beans.property.ReadOnlyStringWrapper;
 import javafx.collections.ObservableList;
@@ -72,6 +73,14 @@ public class FM_GUI extends Application
      */
     private CustomTreeTableColumn<FileData, String> currentNameColumn;
     private CustomTreeTableColumn<FileData, String> currentSizeColumn;
+
+    /**
+     * Нужен для правильной сортировки по размеру. Пока что играет исключительно
+     * "техническую" роль. По умолчанию, эта колонка будет скрыта, чтобы лишний
+     * раз не использовать ресурсы. В случае включения, данные в таблице будут
+     * обновлены.
+     */
+    private CustomTreeTableColumn<FileData, Long> currentSizeBytesColumn;
     private CustomTreeTableColumn<FileData, String> currentTypeColumn;
     private CustomTreeTableColumn<FileData, String> currentCreationTimeColumn;
     private CustomTreeTableColumn<FileData, String> currentOwnerColumn;
@@ -220,7 +229,7 @@ public class FM_GUI extends Application
 
         file_Menu = new Menu("Main");
         file_Menu.getItems().addAll(createNewTab_MenuItem, copyFileName_MenuItem, copyAbsoluteNamePath_MenuItem,
-                openTerminalHere_MenuItem,new SeparatorMenuItem(), exit_MenuItem);
+                openTerminalHere_MenuItem, new SeparatorMenuItem(), exit_MenuItem);
 
         goToParent_MenuItem = new MenuItem("Parent directory");
         goToParent_MenuItem.setOnAction(event -> goToParentPath(currentPath.get(currentContentTabIndex)));
@@ -271,7 +280,7 @@ public class FM_GUI extends Application
         sortByName_MenuItem.setToggleGroup(sortBy_ToggleGroup);
 
         sortBySize_MenuItem = new RadioMenuItem("by Size");
-        sortBySize_MenuItem.setOnAction(event -> requestSort(currentSizeColumn, currentTypeColumn));
+        sortBySize_MenuItem.setOnAction(event -> requestSort(currentSizeBytesColumn, currentTypeColumn));
         sortBySize_MenuItem.setToggleGroup(sortBy_ToggleGroup);
 
         sortByType_MenuItem = new RadioMenuItem("by Type");
@@ -501,6 +510,26 @@ public class FM_GUI extends Application
             }
         });
 
+        CustomTreeTableColumn<FileData, Long> sizeBytesColumn = new CustomTreeTableColumn<>("Size (bytes)");
+        sizeBytesColumn.setMinWidth(preferredWidth * 0.1D);
+        sizeBytesColumn.setSortable(false);
+        sizeBytesColumn.setPrefWidth(preferredWidth * 0.15D);
+        sizeBytesColumn.setId(SIZE_COLUMN_ID);
+        sizeBytesColumn.setVisible(false);
+        sizeBytesColumn.visibleProperty().addListener(event ->
+        {
+            if (!activatedTreeTableView.getColumns().contains(currentSizeBytesColumn))
+            {
+                activatedTreeTableView.getColumns().add(currentSizeBytesColumn);
+            }
+            if (sizeBytesColumn.isVisible())
+            {
+                goToPath(currentPath.get(currentContentTabIndex));
+            }
+
+            activatedTreeTableView.getColumns().remove(currentSizeBytesColumn);
+        });
+
 
         nameColumn.setCellValueFactory((TreeTableColumn.CellDataFeatures<FileData, String> param) ->
                 new ReadOnlyStringWrapper(param.getValue().getValue().getName()));
@@ -514,6 +543,8 @@ public class FM_GUI extends Application
                 new ReadOnlyStringWrapper(param.getValue().getValue().getCreationTime(dateTimeIsoFormatter)));
         typeColumn.setCellValueFactory((TreeTableColumn.CellDataFeatures<FileData, String> param) ->
                 new ReadOnlyStringWrapper(param.getValue().getValue().getType()));
+        sizeBytesColumn.setCellValueFactory((TreeTableColumn.CellDataFeatures<FileData, Long> param) ->
+                new ReadOnlyObjectWrapper<>(param.getValue().getValue().getSize()));
 
         rootItem = new TreeItem<>(new FileData("root", 4096L));
 
@@ -630,6 +661,7 @@ public class FM_GUI extends Application
         currentCreationTimeColumn = creationTimeColumn;
         currentLastModifiedTimeColumn = lastModifiedTimeColumn;
         currentTypeColumn = typeColumn;
+        currentSizeBytesColumn = sizeBytesColumn;
 
         content_VBox = new VBox(rem * 0.45D);
         content_VBox.setPadding(new Insets(rem * 0.15D, rem * 0.7D, rem * 0.7D, rem * 0.7D));
@@ -944,55 +976,6 @@ public class FM_GUI extends Application
         {
             goToNextTab_MenuItem.fire();
         }
-        else if(keyRelease_KeyCode == KeyCode.F7)
-        {
-            System.out.println("Обработка расшриренных атрибутов.");
-            UserDefinedFileAttributeView view = Files.getFileAttributeView(currentPath.get(currentContentTabIndex)
-                    .resolve(activatedTreeTableView.getSelectionModel().getSelectedItem().getValue().getName()),UserDefinedFileAttributeView.class,LinkOption.NOFOLLOW_LINKS);
-
-            try
-            {
-                List<String> list = view.list();
-                Iterator<String> nameIterator = list.iterator();
-                while(nameIterator.hasNext())
-                {
-                    System.out.println(nameIterator.next());
-                }
-//                String name = "user.mimetype";
-//                ByteBuffer buf = ByteBuffer.allocate(view.size(name));
-//                view.read(name,buf);
-//                String value = Charset.defaultCharset().decode(buf).toString();
-//                System.out.println(name + " = " + value);
-            }
-            catch(IOException ioException)
-            {
-                ioException.printStackTrace();
-            }
-
-        }
-
-        else if(keyRelease_KeyCode == KeyCode.F9)
-        {
-            System.out.println("Запись mime расшриренных атрибутов.");
-            UserDefinedFileAttributeView view = Files.getFileAttributeView(currentPath.get(currentContentTabIndex)
-                    .resolve(activatedTreeTableView.getSelectionModel().getSelectedItem().getValue().getName()),UserDefinedFileAttributeView.class,LinkOption.NOFOLLOW_LINKS);
-
-            try
-            {
-                view.write("pizdun",Charset.defaultCharset().encode("text/html"));
-//                String name = "user.mimetype";
-//                ByteBuffer buf = ByteBuffer.allocate(view.size(name));
-//                view.read(name,buf);
-//                String value = Charset.defaultCharset().decode(buf).toString();
-//                System.out.println(name + " = " + value);
-            }
-            catch(IOException ioException)
-            {
-                ioException.printStackTrace();
-            }
-
-        }
-
     }
 
     /**
@@ -1040,8 +1023,13 @@ public class FM_GUI extends Application
         {
             iterator.next().setSortable(true);
         }
-        targetColumn.setSortable(true);
 
+        if (targetColumn.equals(currentSizeBytesColumn))
+        {
+            currentSizeBytesColumn.setVisible(true);
+        }
+
+        targetColumn.setSortable(true);
         targetColumn.setSortType(sortType);
         activatedTreeTableView.getSortOrder().clear();
 
@@ -1090,6 +1078,11 @@ public class FM_GUI extends Application
         while (iterator.hasNext())
         {
             iterator.next().setSortable(false);
+        }
+
+        if (currentSizeBytesColumn.isVisible())
+        {
+            currentSizeBytesColumn.setVisible(false);
         }
     }
 
@@ -2104,7 +2097,7 @@ public class FM_GUI extends Application
             }
         });
 
-        CustomTreeTableColumn<FileData, Long> newSizeColumn = new CustomTreeTableColumn<>("Size");
+        CustomTreeTableColumn<FileData, String> newSizeColumn = new CustomTreeTableColumn<>("Size");
         newSizeColumn.setMinWidth(preferredWidth * 0.05D);
         newSizeColumn.setPrefWidth(preferredWidth * 0.1D);
         newSizeColumn.setSortable(false);
@@ -2193,11 +2186,31 @@ public class FM_GUI extends Application
 
         });
 
+        CustomTreeTableColumn<FileData, Long> sizeBytesColumn = new CustomTreeTableColumn<>("Size (bytes)");
+        sizeBytesColumn.setMinWidth(preferredWidth * 0.1D);
+        sizeBytesColumn.setSortable(false);
+        sizeBytesColumn.setPrefWidth(preferredWidth * 0.15D);
+        sizeBytesColumn.setId(SIZE_COLUMN_ID);
+        sizeBytesColumn.setVisible(false);
+        sizeBytesColumn.visibleProperty().addListener(eventSizeBytesColumn ->
+        {
+            if (!activatedTreeTableView.getColumns().contains(currentSizeBytesColumn))
+            {
+                activatedTreeTableView.getColumns().add(currentSizeBytesColumn);
+            }
+            if (sizeBytesColumn.isVisible())
+            {
+                goToPath(currentPath.get(currentContentTabIndex));
+            }
+
+            activatedTreeTableView.getColumns().remove(currentSizeBytesColumn);
+        });
+
 
         newNameColumn.setCellValueFactory((TreeTableColumn.CellDataFeatures<FileData, String> param) ->
                 new ReadOnlyStringWrapper(param.getValue().getValue().getName()));
-        newSizeColumn.setCellValueFactory((TreeTableColumn.CellDataFeatures<FileData, Long> param) ->
-                new ReadOnlyObjectWrapper<>(param.getValue().getValue().getSize()));
+        newSizeColumn.setCellValueFactory((TreeTableColumn.CellDataFeatures<FileData, String> param) ->
+                new ReadOnlyObjectWrapper<>(param.getValue().getValue().getSize(true)));
         newOwnerColumn.setCellValueFactory((TreeTableColumn.CellDataFeatures<FileData, String> param) ->
                 new ReadOnlyStringWrapper(param.getValue().getValue().getOwner()));
         newLastModifiedTimeColumn.setCellValueFactory((TreeTableColumn.CellDataFeatures<FileData, String> param) ->
@@ -2206,6 +2219,8 @@ public class FM_GUI extends Application
                 new ReadOnlyStringWrapper(param.getValue().getValue().getCreationTime(dateTimeIsoFormatter)));
         newTypeColumn.setCellValueFactory((TreeTableColumn.CellDataFeatures<FileData, String> param) ->
                 new ReadOnlyStringWrapper(param.getValue().getValue().getType()));
+        sizeBytesColumn.setCellValueFactory((TreeTableColumn.CellDataFeatures<FileData, Long> param) ->
+                new ReadOnlyObjectWrapper<>(param.getValue().getValue().getSize()));
 
         newTreeTableView.getColumns().addAll(newNameColumn, newTypeColumn, newSizeColumn,
                 newOwnerColumn, newCreationTimeColumn, newLastModifiedTimeColumn);
