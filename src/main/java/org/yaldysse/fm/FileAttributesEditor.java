@@ -1,5 +1,6 @@
 package org.yaldysse.fm;
 
+import javafx.event.ActionEvent;
 import javafx.geometry.Insets;
 import javafx.geometry.Orientation;
 import javafx.geometry.Pos;
@@ -16,8 +17,9 @@ import javafx.scene.text.FontWeight;
 import javafx.scene.text.Text;
 import javafx.stage.Popup;
 import javafx.stage.Stage;
-
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
 import java.nio.file.*;
 import java.nio.file.attribute.*;
 import java.text.NumberFormat;
@@ -25,6 +27,7 @@ import java.time.*;
 import java.time.format.DateTimeFormatter;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 
 public class FileAttributesEditor
 {
@@ -37,48 +40,86 @@ public class FileAttributesEditor
     private GridPane attributes_GridPane;
     private VBox info_VBox;
     private VBox edit_VBox;
-    private CheckBox editPermissions_CheckBox;
     private GridPane permissionSelector_GridPane;
     private CheckBox[][] permissionsCheckBoxes;
     private Button apply_Button;
-    private VBox creationTimeEditorPane_VBox;
-    private CheckBox editLastModifiedTime_CheckBox;
-    private VBox lastModifiedTimeEditorPane_VBox;
     private ScrollPane edit_ScrollPane;
     private ScrollPane info_ScrollPane;
-    private CheckBox editCreationTime_CheckBox;
     private DatePicker creationTime_Picker;
     private TextField creationTime_TextField;
     private DatePicker lastModifiedDate_Picker;
     private TextField lastModifiedTime_TextField;
     private int preferredWidth;
     private int preferredHeight;
-    private CheckBox editOwner_CheckBox;
-    private VBox ownerEditorPane_VBox;
     private UserPrincipal[] newUserPrincipal;
     private GroupPrincipal[] newGroupPrincipal;
+    private HBox permissionTitle_HBox;
     private Popup warning_Popup;
     private HBox editOwner_HBox;
-    private CheckBox editGroup_CheckBox;
+
+    private ComboBox<String> attributesNames_ComboBox;
+    private TextField extendedAttributeValue_TextField;
+
+    private Label permission_Label;
+
+    private VBox ownerEditorPane_VBox;
     private VBox groupEditorPane_VBox;
+    private VBox creationTimeEditorPane_VBox;
+    private VBox lastModifiedTimeEditorPane_VBox;
+    private VBox extendedAttributesEditorPane_VBox;
 
-    private Label ownerValue_Label;
-    private Label groupValue_Label;
-    private Label sizeBytesValue_Label;
-    private Label creationTimeValue_Label;
-    private Label lastModifiedValue_Label;
+    private CheckBox editOwner_CheckBox;
+    private CheckBox editGroup_CheckBox;
+    private CheckBox editCreationTime_CheckBox;
+    private CheckBox editLastModifiedTime_CheckBox;
+    private CheckBox editPermissions_CheckBox;
+    private CheckBox editExtendedAttributes_CheckBox;
 
-    private HBox readOwner_HBox;
-    private HBox writeOwner_HBox;
-    private HBox executableOwner_HBox;
+    private Label ownerAttribute_Label;
+    private Label groupAttribute_Label;
+    private Label sizeBytesAttribute_Label;
+    private Label creationTimeAttribute_Label;
+    private Label lastModifiedTimeAttribute_Label;
 
-    private HBox readGroup_HBox;
-    private HBox writeGroup_HBox;
-    private HBox executeGroup_HBox;
+    private Label ownerAttributeValue_Label;
+    private Label groupAttributeValue_Label;
+    private Label sizeBytesAttributeValue_Label;
+    private Label creationTimeAttributeValue_Label;
+    private Label lastModifiedTimeAttributeValue_Label;
 
-    private HBox readOther_HBox;
-    private HBox writeOther_HBox;
-    private HBox executeOther_HBox;
+    private Separator firstSeparator;
+    private Separator secondSeparator;
+
+    private VBox ownerPermissionsBlock_VBox;
+    private VBox groupPermissionsBlock_VBox;
+    private VBox otherPermissionsBlock_VBox;
+
+    private Label ownerPermissionsBlock_Label;
+    private Label groupPermissionsBlock_Label;
+    private Label otherPermissionsBlock_Label;
+
+    /**
+     * Предназначены для хранения HBox под индикаторы.
+     * Первый элемент для владельца,
+     * второй - для группы,
+     * третий - для остальных
+     */
+    private HBox[] readPermissionsIndicator_HBox;
+    private HBox[] writePermissionsIndicator_HBox;
+    private HBox[] executePermissionsIndicator_HBox;
+
+    private Label[] readPermissionsIndicator;
+    private Label[] writePermissionsIndicator;
+    private Label[] executePermissionsIndicator;
+
+    private ImageView[] readPermissionsIndicator_ImageView;
+    private ImageView[] writePermissionsIndicator_ImageView;
+    private ImageView[] executePermissionsIndicator_ImageView;
+
+    private Label[] extendedAttributesNames_Label;
+    private Label[] extendedAttributesValues_Label;
+
+    private Label deleteExtendedAttribute_Label;
 
     public FileAttributesEditor(final Path file)
     {
@@ -120,6 +161,8 @@ public class FileAttributesEditor
                 {
                     info_ScrollPane.setBackground(new Background(new BackgroundFill(Color.LIGHTSTEELBLUE,
                             CornerRadii.EMPTY, Insets.EMPTY)));
+                    updateInfoTabContent();
+
                 }
                 root.setBackground(new Background(new BackgroundFill(Color.LIGHTSTEELBLUE,
                         CornerRadii.EMPTY, Insets.EMPTY)));
@@ -135,8 +178,6 @@ public class FileAttributesEditor
                 System.out.println("Редактирование.");
                 edit_VBox.setBackground(new Background(new BackgroundFill(Color.MEDIUMPURPLE,
                         CornerRadii.EMPTY, Insets.EMPTY)));
-//                edit_ScrollPane.setBackground(new Background(new BackgroundFill(Color.MEDIUMORCHID,
-//                        CornerRadii.EMPTY, Insets.EMPTY)));
                 info_edit_TabPane.setBackground(new Background(new BackgroundFill(Color.MEDIUMPURPLE,
                         CornerRadii.EMPTY, Insets.EMPTY)));
                 root.setBackground(new Background(new BackgroundFill(Color.MEDIUMPURPLE,
@@ -172,21 +213,33 @@ public class FileAttributesEditor
         //attributes_GridPane.setGridLinesVisible(true);
         attributes_GridPane.setVgap(FM_GUI.rem * 0.35D);
 
-        Label owner_Label = new Label("Owner:");
-        attributes_GridPane.addRow(0, owner_Label);
+        ownerAttribute_Label = new Label("Owner:");
+        groupAttribute_Label = new Label("Group:");
+        sizeBytesAttribute_Label = new Label("Size (bytes):");
+        creationTimeAttribute_Label = new Label("Creation time:");
+        lastModifiedTimeAttribute_Label = new Label("Last Modified time:");
 
-        Label group_Label = new Label("Group:");
-        attributes_GridPane.addRow(attributes_GridPane.getRowCount(), group_Label);
+        firstSeparator = new Separator(Orientation.HORIZONTAL);
 
-        Label sizeBites_Label = new Label("Size (bytes):");
-        attributes_GridPane.addRow(attributes_GridPane.getRowCount(), sizeBites_Label);
+        ownerAttributeValue_Label = new Label();
+        groupAttributeValue_Label = new Label();
+        sizeBytesAttributeValue_Label = new Label();
+        creationTimeAttributeValue_Label = new Label();
+        lastModifiedTimeAttributeValue_Label = new Label();
 
-        Label creationTime_Label = new Label("Creation time:");
-        attributes_GridPane.addRow(attributes_GridPane.getRowCount(), creationTime_Label);
+        attributes_GridPane.addRow(attributes_GridPane.getRowCount(), ownerAttribute_Label,
+                ownerAttributeValue_Label);
+        attributes_GridPane.addRow(attributes_GridPane.getRowCount(), groupAttribute_Label,
+                groupAttributeValue_Label);
+        attributes_GridPane.addRow(attributes_GridPane.getRowCount(), sizeBytesAttribute_Label,
+                sizeBytesAttributeValue_Label);
+        attributes_GridPane.addRow(attributes_GridPane.getRowCount(), creationTimeAttribute_Label,
+                creationTimeAttributeValue_Label);
+        attributes_GridPane.addRow(attributes_GridPane.getRowCount(), lastModifiedTimeAttribute_Label,
+                lastModifiedTimeAttributeValue_Label);
+        attributes_GridPane.add(firstSeparator, 0, attributes_GridPane.getRowCount(), 2, 1);
 
-        Label lastModifiedTime_Label = new Label("Last Modified time:");
-        attributes_GridPane.addRow(attributes_GridPane.getRowCount(), lastModifiedTime_Label);
-        attributes_GridPane.add(new Separator(Orientation.HORIZONTAL), 0, attributes_GridPane.getRowCount(), 2, 1);
+        readExtendedAttributesAndCreateGuiNodes();
 
         info_VBox = new VBox(FM_GUI.rem * 0.35D);
         info_VBox.getChildren().addAll(fileName_Label, attributes_GridPane);
@@ -200,6 +253,97 @@ public class FileAttributesEditor
         info_ScrollPane.setFitToHeight(true);
         info_ScrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
         info_ScrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+
+        //------------------------- Подготовка узлов для прав доступа
+        permission_Label = new Label("Permissions");
+        permissionTitle_HBox = new HBox(permission_Label);
+        permissionTitle_HBox.setAlignment(Pos.CENTER);
+
+        ownerPermissionsBlock_Label = new Label("Owner:");
+        groupPermissionsBlock_Label = new Label("Group:");
+        otherPermissionsBlock_Label = new Label("Other:");
+
+        ownerPermissionsBlock_VBox = new VBox(ownerPermissionsBlock_Label);
+        ownerPermissionsBlock_VBox.setAlignment(Pos.CENTER);
+
+        groupPermissionsBlock_VBox = new VBox(groupPermissionsBlock_Label);
+        groupPermissionsBlock_VBox.setAlignment(Pos.CENTER);
+
+        otherPermissionsBlock_VBox = new VBox(otherPermissionsBlock_Label);
+        otherPermissionsBlock_VBox.setAlignment(Pos.CENTER);
+
+        readPermissionsIndicator = new Label[3];
+        writePermissionsIndicator = new Label[3];
+        executePermissionsIndicator = new Label[3];
+
+        readPermissionsIndicator_ImageView = new ImageView[readPermissionsIndicator.length];
+        writePermissionsIndicator_ImageView = new ImageView[writePermissionsIndicator.length];
+        executePermissionsIndicator_ImageView = new ImageView[executePermissionsIndicator.length];
+
+        for (int k = 0; k < readPermissionsIndicator.length; k++)
+        {
+            readPermissionsIndicator[k] = new Label("Read");
+            readPermissionsIndicator_ImageView[k] = new ImageView();
+        }
+
+        for (int k = 0; k < writePermissionsIndicator.length; k++)
+        {
+            writePermissionsIndicator[k] = new Label("Write");
+            writePermissionsIndicator_ImageView[k] = new ImageView();
+        }
+
+        for (int k = 0; k < executePermissionsIndicator.length; k++)
+        {
+            executePermissionsIndicator[k] = new Label("Execute");
+            executePermissionsIndicator_ImageView[k] = new ImageView();
+        }
+
+
+        readPermissionsIndicator_HBox = new HBox[readPermissionsIndicator.length];
+        writePermissionsIndicator_HBox = new HBox[writePermissionsIndicator.length];
+        executePermissionsIndicator_HBox = new HBox[executePermissionsIndicator.length];
+
+        for (int k = 0; k < readPermissionsIndicator_HBox.length; k++)
+        {
+            readPermissionsIndicator_HBox[k] = new HBox(FM_GUI.rem * 0.35D,
+                    readPermissionsIndicator[k], readPermissionsIndicator_ImageView[k]);
+        }
+
+        for (int k = 0; k < writePermissionsIndicator_HBox.length; k++)
+        {
+            writePermissionsIndicator_HBox[k] = new HBox(FM_GUI.rem * 0.35D,
+                    writePermissionsIndicator[k], writePermissionsIndicator_ImageView[k]);
+        }
+
+        for (int k = 0; k < executePermissionsIndicator_HBox.length; k++)
+        {
+            executePermissionsIndicator_HBox[k] = new HBox(FM_GUI.rem * 0.35D,
+                    executePermissionsIndicator[k], executePermissionsIndicator_ImageView[k]);
+        }
+        //==========================
+        attributes_GridPane.addRow(attributes_GridPane.getRowCount(), new Label());
+        attributes_GridPane.add(permissionTitle_HBox, 0, attributes_GridPane.getRowCount(), 2, 1);
+
+        //Owner
+        attributes_GridPane.add(readPermissionsIndicator_HBox[0], 1, attributes_GridPane.getRowCount());
+        attributes_GridPane.addRow(attributes_GridPane.getRowCount(), ownerPermissionsBlock_VBox,
+                writePermissionsIndicator_HBox[0]);
+        attributes_GridPane.add(executePermissionsIndicator_HBox[0], 1, attributes_GridPane.getRowCount());
+        attributes_GridPane.addRow(attributes_GridPane.getRowCount(), new Label());
+
+        //Group
+        attributes_GridPane.add(readPermissionsIndicator_HBox[1], 1, attributes_GridPane.getRowCount());
+        attributes_GridPane.addRow(attributes_GridPane.getRowCount(), groupPermissionsBlock_VBox,
+                writePermissionsIndicator_HBox[1]);
+        attributes_GridPane.add(executePermissionsIndicator_HBox[1], 1, attributes_GridPane.getRowCount());
+        attributes_GridPane.addRow(attributes_GridPane.getRowCount(), new Label());
+
+        //Other
+        attributes_GridPane.add(readPermissionsIndicator_HBox[2], 1, attributes_GridPane.getRowCount());
+        attributes_GridPane.addRow(attributes_GridPane.getRowCount(), otherPermissionsBlock_VBox,
+                writePermissionsIndicator_HBox[2]);
+        attributes_GridPane.add(executePermissionsIndicator_HBox[2], 1, attributes_GridPane.getRowCount());
+        //attributes_GridPane.addRow(attributes_GridPane.getRowCount(), new Label());
 
         readAttributes();
 
@@ -218,159 +362,68 @@ public class FileAttributesEditor
 
             DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd, HH:mm:ss");
 
-            ownerValue_Label = new Label(posixFileAttributes.owner().getName());
-            attributes_GridPane.add(ownerValue_Label, 1, 0);
+            ownerAttributeValue_Label.setText(posixFileAttributes.owner().getName());
+            groupAttributeValue_Label.setText(String.valueOf(posixFileAttributes.group().getName()));
+            sizeBytesAttributeValue_Label.setText(NumberFormat.getNumberInstance().format(posixFileAttributes.size()));
+            creationTimeAttributeValue_Label.setText(LocalDateTime.ofInstant(basicFileAttributes.creationTime().toInstant(),
+                    ZoneId.systemDefault()).format(formatter));
+            lastModifiedTimeAttributeValue_Label.setText(LocalDateTime.ofInstant(basicFileAttributes.lastModifiedTime().toInstant(),
+                    ZoneId.systemDefault()).format(formatter));
 
-            groupValue_Label = new Label(String.valueOf(posixFileAttributes.group().getName()));
-            attributes_GridPane.add(groupValue_Label, 1, 1);
-
-            sizeBytesValue_Label = new Label(NumberFormat.getNumberInstance().format(posixFileAttributes.size()));
-            attributes_GridPane.add(sizeBytesValue_Label, 1, 2);
-
-            creationTimeValue_Label = new Label(LocalDateTime.ofInstant(basicFileAttributes.creationTime().toInstant(), ZoneId.systemDefault()).format(formatter));
-            attributes_GridPane.add(creationTimeValue_Label, 1, 3);
-
-            lastModifiedValue_Label = new Label(LocalDateTime.ofInstant(basicFileAttributes.lastModifiedTime().toInstant(), ZoneId.systemDefault()).format(formatter));
-            attributes_GridPane.add(lastModifiedValue_Label, 1, 4);
-
-            Label permission_Label = new Label("Permissions");
-            HBox permission_HBox = new HBox(permission_Label);
-            permission_HBox.setAlignment(Pos.CENTER);
-
-            Label owner_Label = new Label("Owner:");
-            VBox owner_VBox = new VBox(owner_Label);
-            owner_VBox.setAlignment(Pos.CENTER);
-
-            Label group_Label = new Label("Group:");
-            VBox group_VBox = new VBox(group_Label);
-            group_VBox.setAlignment(Pos.CENTER);
-
-            Label read_Label = new Label("Read");
-            readOwner_HBox = new HBox(FM_GUI.rem * 0.35D, read_Label);
-
-            Label write_Label = new Label("Write");
-            writeOwner_HBox = new HBox(FM_GUI.rem * 0.35D, write_Label);
-
-            Label executable_Label = new Label("Execute");
-            executableOwner_HBox = new HBox(FM_GUI.rem * 0.35D, executable_Label);
-
-            attributes_GridPane.add(permission_HBox, 0, attributes_GridPane.getRowCount(), 2, 1);
-            attributes_GridPane.add(readOwner_HBox, 1, attributes_GridPane.getRowCount());
-            attributes_GridPane.addRow(attributes_GridPane.getRowCount(), owner_VBox, writeOwner_HBox);
-            attributes_GridPane.add(executableOwner_HBox, 1, attributes_GridPane.getRowCount());
-            attributes_GridPane.addRow(attributes_GridPane.getRowCount(), new Label());
-
-            Label readGroup_Label = new Label("Read");
-            Label writeGroup_Label = new Label("Write");
-            Label executableGroup_Label = new Label("Execute");
-
-            readGroup_HBox = new HBox(FM_GUI.rem * 0.35D, readGroup_Label);
-            writeGroup_HBox = new HBox(FM_GUI.rem * 0.35D, writeGroup_Label);
-            executeGroup_HBox = new HBox(FM_GUI.rem * 0.35D, executableGroup_Label);
-
-            attributes_GridPane.add(readGroup_HBox, 1, attributes_GridPane.getRowCount());
-            attributes_GridPane.addRow(attributes_GridPane.getRowCount(), group_VBox, writeGroup_HBox);
-            attributes_GridPane.add(executeGroup_HBox, 1, attributes_GridPane.getRowCount());
 
             Image granted_Image = new Image(getClass().getResourceAsStream("/Images/granted.png"));
             Image hrenZnayet_Image = new Image(getClass().getResourceAsStream("/Images/cancel.png"));
 
-            Label other_Label = new Label("Other:");
-            VBox other_VBox = new VBox(other_Label);
-            other_VBox.setAlignment(Pos.CENTER);
-
-            Label readOther_Label = new Label("Read");
-            Label writeOther_Label = new Label("Write");
-            Label executableOther_Label = new Label("Execute");
-
-            readOther_HBox = new HBox(FM_GUI.rem * 0.35D, readOther_Label);
-            writeOther_HBox = new HBox(FM_GUI.rem * 0.35D, writeOther_Label);
-            executeOther_HBox = new HBox(FM_GUI.rem * 0.35D, executableOther_Label);
-
-            attributes_GridPane.addRow(attributes_GridPane.getRowCount(), new Label());
-            attributes_GridPane.add(readOther_HBox, 1, attributes_GridPane.getRowCount());
-            attributes_GridPane.addRow(attributes_GridPane.getRowCount(), other_VBox, writeOther_HBox);
-            attributes_GridPane.add(executeOther_HBox, 1, attributes_GridPane.getRowCount());
+            //Заполняем все ImageView изображениями с запретом
+            for (int k = 0; k < readPermissionsIndicator_ImageView.length; k++)
+            {
+                setImageToImageView(hrenZnayet_Image, readPermissionsIndicator_ImageView[k]);
+                setImageToImageView(hrenZnayet_Image, writePermissionsIndicator_ImageView[k]);
+                setImageToImageView(hrenZnayet_Image, executePermissionsIndicator_ImageView[k]);
+            }
 
             Iterator<PosixFilePermission> iterator = posixFileAttributes.permissions().iterator();
             while (iterator.hasNext())
             {
                 PosixFilePermission temporaryPermission = iterator.next();
+
                 if (temporaryPermission == PosixFilePermission.OWNER_READ)
                 {
-                    addImageViewToHbox(granted_Image, readOwner_HBox);
+                    setImageToImageView(granted_Image, readPermissionsIndicator_ImageView[0]);
                 }
                 else if (temporaryPermission == PosixFilePermission.OWNER_WRITE)
                 {
-                    addImageViewToHbox(granted_Image, writeOwner_HBox);
+                    setImageToImageView(granted_Image, writePermissionsIndicator_ImageView[0]);
                 }
                 else if (temporaryPermission == PosixFilePermission.OWNER_EXECUTE)
                 {
-                    addImageViewToHbox(granted_Image, executableOwner_HBox);
+                    setImageToImageView(granted_Image, executePermissionsIndicator_ImageView[0]);
                 }
                 else if (temporaryPermission == PosixFilePermission.GROUP_READ)
                 {
-                    addImageViewToHbox(granted_Image, readGroup_HBox);
+                    setImageToImageView(granted_Image, readPermissionsIndicator_ImageView[1]);
                 }
                 else if (temporaryPermission == PosixFilePermission.GROUP_WRITE)
                 {
-                    addImageViewToHbox(granted_Image, writeGroup_HBox);
+                    setImageToImageView(granted_Image, writePermissionsIndicator_ImageView[1]);
                 }
                 else if (temporaryPermission == PosixFilePermission.GROUP_EXECUTE)
                 {
-                    addImageViewToHbox(granted_Image, executeGroup_HBox);
+                    setImageToImageView(granted_Image, executePermissionsIndicator_ImageView[1]);
                 }
                 else if (temporaryPermission == PosixFilePermission.OTHERS_READ)
                 {
-                    addImageViewToHbox(granted_Image, readOther_HBox);
+                    setImageToImageView(granted_Image, readPermissionsIndicator_ImageView[2]);
                 }
                 else if (temporaryPermission == PosixFilePermission.OTHERS_WRITE)
                 {
-                    addImageViewToHbox(granted_Image, writeOther_HBox);
+                    setImageToImageView(granted_Image, writePermissionsIndicator_ImageView[2]);
                 }
                 else if (temporaryPermission == PosixFilePermission.OTHERS_EXECUTE)
                 {
-                    addImageViewToHbox(granted_Image, executeOther_HBox);
+                    setImageToImageView(granted_Image, executePermissionsIndicator_ImageView[2]);
                 }
             }
-
-            if (readOwner_HBox.getChildren().size() != 2)
-            {
-                addImageViewToHbox(hrenZnayet_Image, readOwner_HBox);
-            }
-            if (writeOwner_HBox.getChildren().size() != 2)
-            {
-                addImageViewToHbox(hrenZnayet_Image, writeOwner_HBox);
-            }
-            if (executableOwner_HBox.getChildren().size() != 2)
-            {
-                addImageViewToHbox(hrenZnayet_Image, executableOwner_HBox);
-            }
-            if (readGroup_HBox.getChildren().size() != 2)
-            {
-                addImageViewToHbox(hrenZnayet_Image, readGroup_HBox);
-            }
-            if (writeGroup_HBox.getChildren().size() != 2)
-            {
-                addImageViewToHbox(hrenZnayet_Image, writeGroup_HBox);
-            }
-            if (executeGroup_HBox.getChildren().size() != 2)
-            {
-                addImageViewToHbox(hrenZnayet_Image, executeGroup_HBox);
-            }
-            if (readOther_HBox.getChildren().size() != 2)
-            {
-                addImageViewToHbox(hrenZnayet_Image, readOther_HBox);
-            }
-            if (writeOther_HBox.getChildren().size() != 2)
-            {
-                addImageViewToHbox(hrenZnayet_Image, writeOther_HBox);
-            }
-            if (executeOther_HBox.getChildren().size() != 2)
-            {
-                addImageViewToHbox(hrenZnayet_Image, executeOther_HBox);
-            }
-
         }
         catch (IOException ioException)
         {
@@ -378,13 +431,60 @@ public class FileAttributesEditor
         }
     }
 
-    private void addImageViewToHbox(final Image image, HBox hbox)
+    private void readExtendedAttributesAndCreateGuiNodes()
     {
-        ImageView temporaryImageView = new ImageView(image);
-        temporaryImageView.setPreserveRatio(true);
-        temporaryImageView.setFitHeight(20.0D);
-        temporaryImageView.setSmooth(true);
-        hbox.getChildren().add(temporaryImageView);
+        UserDefinedFileAttributeView view = Files.getFileAttributeView(targetFile_Path,
+                UserDefinedFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
+
+        try
+        {
+            List<String> extendedAttributesNames_List = view.list();
+            if (extendedAttributesNames_List.size() == 0)
+            {
+                System.out.println("Расширенных аттрибутов не обнаружено.");
+            }
+            else
+            {
+                extendedAttributesNames_Label = new Label[extendedAttributesNames_List.size()];
+                extendedAttributesValues_Label = new Label[extendedAttributesNames_List.size()];
+
+                Iterator<String> extendedAttributes_Iterator = extendedAttributesNames_List.iterator();
+                int index = 0;
+                String temporaryName = null;
+                String temporaryValue = null;
+                ByteBuffer buffer = null;
+
+                while (extendedAttributes_Iterator.hasNext())
+                {
+                    temporaryName = extendedAttributes_Iterator.next();
+                    buffer = ByteBuffer.allocate(view.size(temporaryName));
+                    view.read(temporaryName, buffer);
+                    buffer.flip();
+                    temporaryValue = Charset.defaultCharset().decode(buffer).toString();
+                    extendedAttributesNames_Label[index] = new Label(temporaryName + ":");
+                    extendedAttributesValues_Label[index] = new Label(temporaryValue);
+
+                    attributes_GridPane.addRow(attributes_GridPane.getRowCount(),
+                            extendedAttributesNames_Label[index], extendedAttributesValues_Label[index]);
+                    index++;
+
+                }
+                secondSeparator = new Separator(Orientation.HORIZONTAL);
+                attributes_GridPane.add(secondSeparator, 0, attributes_GridPane.getRowCount(), 2, 1);
+            }
+        }
+        catch (IOException ioException)
+        {
+            ioException.printStackTrace();
+        }
+    }
+
+    private void setImageToImageView(final Image image, ImageView targetImageView)
+    {
+        targetImageView.setImage(image);
+        targetImageView.setPreserveRatio(true);
+        targetImageView.setFitHeight(20.0D);
+        targetImageView.setSmooth(true);
     }
 
     private void initializeEditTab()
@@ -533,6 +633,34 @@ public class FileAttributesEditor
             }
         });
 
+        editExtendedAttributes_CheckBox = new CheckBox("Extended Attributes ---------");
+        editExtendedAttributes_CheckBox.setTextFill(Color.HONEYDEW);
+        editExtendedAttributes_CheckBox.setFont(Font.font(Font.getDefault().getName(), FontWeight.BOLD, 14.0D));
+        editExtendedAttributes_CheckBox.setOnAction(event ->
+        {
+            if (editExtendedAttributes_CheckBox.isSelected())
+            {
+                if (extendedAttributesEditorPane_VBox == null)
+                {
+                    initializeExtendedAttributesEditorPane();
+                }
+                edit_VBox.getChildren().add(edit_VBox.getChildren().indexOf(editExtendedAttributes_CheckBox) + 1, extendedAttributesEditorPane_VBox);
+                //apply_Button.setDisable(false);
+            }
+            else
+            {
+                edit_VBox.getChildren().remove(extendedAttributesEditorPane_VBox);
+                if (!editCreationTime_CheckBox.isSelected() &&
+                        !editLastModifiedTime_CheckBox.isSelected() &&
+                        !editPermissions_CheckBox.isSelected() &&
+                        !editOwner_CheckBox.isSelected() &&
+                        !editGroup_CheckBox.isSelected())
+                {
+                    apply_Button.setDisable(true);
+                }
+            }
+        });
+
         Image warning_Image = new Image(getClass().getResourceAsStream("/Images/caution.png"));
         ImageView warning_ImageView = new ImageView(warning_Image);
         warning_ImageView.setPreserveRatio(true);
@@ -564,7 +692,7 @@ public class FileAttributesEditor
         apply_HBox.setAlignment(Pos.CENTER_RIGHT);
 
         edit_VBox = new VBox(FM_GUI.rem * 0.5D, editCreationTime_CheckBox, editLastModifiedTime_CheckBox,
-                editOwner_HBox, editGroup_CheckBox,editPermissions_CheckBox, apply_HBox);
+                editOwner_HBox, editGroup_CheckBox, editPermissions_CheckBox, editExtendedAttributes_CheckBox, apply_HBox);
         edit_VBox.setPadding(new Insets(FM_GUI.rem * 0.5, 0.0D, 0.0D, 0.0D));
 
         edit_ScrollPane = new ScrollPane(edit_VBox);
@@ -745,8 +873,8 @@ public class FileAttributesEditor
         creationTime_TextField.setOnKeyTyped((event) ->
         {
             System.out.println("value: " + creationTime_TextField.getText());
-            char currentCharater = event.getCharacter().charAt(0);
-            System.out.println((int) currentCharater);
+            char currentCharacter = event.getCharacter().charAt(0);
+            System.out.println((int) currentCharacter);
 
             if (creationTime_TextField.getText().length() > 8)
             {
@@ -755,9 +883,9 @@ public class FileAttributesEditor
             }
             else
             {
-                if ((int) currentCharater < 48 || (int) currentCharater > 57)
+                if ((int) currentCharacter < 48 || (int) currentCharacter > 57)
                 {
-                    if ((int) currentCharater == 58 || (int) currentCharater == 8)//: и backspace
+                    if ((int) currentCharacter == 58 || (int) currentCharacter == 8)//: и backspace
                     {
 
                     }
@@ -891,6 +1019,10 @@ public class FileAttributesEditor
         name_Label.setTextFill(Color.HONEYDEW);
         name_Label.setFont(Font.font(Font.getDefault().getName(), FontWeight.BOLD, 13.0D));
 
+        Text forCalculateWidth_Text = new Text(name_Label.getText());
+        forCalculateWidth_Text.setFont(name_Label.getFont());
+        name_Label.setMinWidth(forCalculateWidth_Text.getBoundsInParent().getWidth());
+
         Label ownerNotFound_Label = new Label("User with specified name doesn't exist.");
         ownerNotFound_Label.setTextFill(Color.FIREBRICK);
         ownerNotFound_Label.setEffect(new DropShadow(20.0D, Color.GAINSBORO));
@@ -902,7 +1034,7 @@ public class FileAttributesEditor
 
         TextField ownerName_TextField = new TextField();
         ownerName_TextField.setPromptText("Enter here name of new owner");
-        ownerName_TextField.setText("");
+        ownerName_TextField.setText(posixFileAttributes.owner().toString());
         //ownerName_TextField.setPrefColumnCount(12);
         ownerName_TextField.setOnKeyTyped(event ->
         {
@@ -965,6 +1097,10 @@ public class FileAttributesEditor
         name_Label.setTextFill(Color.HONEYDEW);
         name_Label.setFont(Font.font(Font.getDefault().getName(), FontWeight.BOLD, 13.0D));
 
+        Text forCalculateWidth_Text = new Text(name_Label.getText());
+        forCalculateWidth_Text.setFont(name_Label.getFont());
+        name_Label.setMinWidth(forCalculateWidth_Text.getBoundsInParent().getWidth());
+
         Label groupNotFound_Label = new Label("Group with specified name doesn't exist.");
         groupNotFound_Label.setTextFill(Color.FIREBRICK);
         groupNotFound_Label.setEffect(new DropShadow(20.0D, Color.GAINSBORO));
@@ -976,7 +1112,7 @@ public class FileAttributesEditor
 
         TextField groupName_TextField = new TextField();
         groupName_TextField.setPromptText("Enter new name of group here");
-        groupName_TextField.setText("");
+        groupName_TextField.setText(posixFileAttributes.group().getName());
         groupName_TextField.setOnKeyTyped(event ->
         {
             try
@@ -1007,6 +1143,100 @@ public class FileAttributesEditor
 
         groupEditorPane_VBox.getChildren().addAll(ownerName_HBox, groupNotFound_HBox);
     }
+
+    private void initializeExtendedAttributesEditorPane()
+    {
+        extendedAttributesEditorPane_VBox = new VBox(FM_GUI.rem * 0.45D);
+        extendedAttributesEditorPane_VBox.setPadding(new Insets(FM_GUI.rem * 0.7D, FM_GUI.rem * 0.7D,
+                FM_GUI.rem * 0.7D, FM_GUI.rem * 1.5D));
+        extendedAttributesEditorPane_VBox.setBorder(new Border(new BorderStroke(Color.BLACK,
+                BorderStrokeStyle.SOLID, CornerRadii.EMPTY, BorderStroke.THIN, new Insets(0.0D,
+                FM_GUI.rem * 0.95D, FM_GUI.rem * 0.55D, FM_GUI.rem * 1.0D))));
+
+        UserDefinedFileAttributeView view = null;
+        List<String> extendedAttributesNames_List = null;
+
+        try
+        {
+            view = Files.getFileAttributeView(targetFile_Path, UserDefinedFileAttributeView.class,
+                    LinkOption.NOFOLLOW_LINKS);
+            extendedAttributesNames_List = view.list();
+        }
+        catch (IOException ioException)
+        {
+            ioException.printStackTrace();
+        }
+
+        Text forCalculateWidth_Text = new Text();
+
+        Label name_Label = new Label("Name");
+        name_Label.setTextFill(Color.HONEYDEW);
+        name_Label.setFont(Font.font(Font.getDefault().getName(), FontWeight.BOLD, 13.0D));
+
+        forCalculateWidth_Text.setText(name_Label.getText());
+        forCalculateWidth_Text.setFont(name_Label.getFont());
+        name_Label.setMinWidth(forCalculateWidth_Text.getBoundsInParent().getWidth());
+
+        attributesNames_ComboBox = new ComboBox<>();
+        attributesNames_ComboBox.getItems().add("<New>");
+        attributesNames_ComboBox.setOnAction(event ->
+        {
+            int selectedIndex = attributesNames_ComboBox.getSelectionModel().getSelectedIndex();
+            System.out.println("Выбран єлемент с индексом: " + selectedIndex);
+
+            if (selectedIndex == 0)
+            {
+                attributesNames_ComboBox.setEditable(true);
+                deleteExtendedAttribute_Label.setVisible(false);
+            }
+            else if (selectedIndex == -1)
+            {
+                System.out.println("Новый єлемент: " + attributesNames_ComboBox.getValue());
+                attributesNames_ComboBox.getItems().add(attributesNames_ComboBox.getValue());
+                deleteExtendedAttribute_Label.setVisible(true);
+            }
+            else
+            {
+                attributesNames_ComboBox.setEditable(false);
+                deleteExtendedAttribute_Label.setVisible(true);
+            }
+            apply_Button.setDisable(false);
+        });
+
+        deleteExtendedAttribute_Label = new Label("✘");
+        deleteExtendedAttribute_Label.setFont(Font.font(Font.getDefault().getName(),
+                FontWeight.BOLD, 24.0D));
+        deleteExtendedAttribute_Label.setTextFill(Color.CRIMSON);
+        deleteExtendedAttribute_Label.setEffect(new DropShadow(4.0D, Color.BLACK));
+        deleteExtendedAttribute_Label.setTooltip(new Tooltip("Delete attribute"));
+        deleteExtendedAttribute_Label.setOnMouseClicked(event -> deleteExtendedAttribute_Action(null));
+        deleteExtendedAttribute_Label.setVisible(false);
+
+        Iterator<String> extendedAttributes_Iterator = extendedAttributesNames_List.iterator();
+        while (extendedAttributes_Iterator.hasNext())
+        {
+            attributesNames_ComboBox.getItems().add(extendedAttributes_Iterator.next());
+        }
+
+
+        extendedAttributeValue_TextField = new TextField();
+        extendedAttributeValue_TextField.setPromptText("Enter new value here");
+        extendedAttributeValue_TextField.setText("");
+
+        Label value_Label = new Label("Value");
+        value_Label.setTextFill(Color.HONEYDEW);
+        value_Label.setFont(Font.font(Font.getDefault().getName(), FontWeight.BOLD, 13.0D));
+
+        forCalculateWidth_Text.setText(value_Label.getText());
+        forCalculateWidth_Text.setFont(value_Label.getFont());
+        value_Label.setMinWidth(forCalculateWidth_Text.getBoundsInParent().getWidth());
+
+        HBox name_HBox = new HBox(FM_GUI.rem * 0.85D, name_Label, attributesNames_ComboBox, deleteExtendedAttribute_Label);
+        HBox value_HBox = new HBox(FM_GUI.rem * 0.85D, value_Label, extendedAttributeValue_TextField);
+
+        extendedAttributesEditorPane_VBox.getChildren().addAll(name_HBox, value_HBox);
+    }
+
 
     private void applyNewAttributes()
     {
@@ -1081,6 +1311,33 @@ public class FileAttributesEditor
 
         try
         {
+            if (editExtendedAttributes_CheckBox.isSelected())
+            {
+                applyNewExtendedAttribute();
+                apply_Button.setDisable(true);
+            }
+        }
+        catch (FileSystemException fileSystemException)
+        {
+            System.out.println("Недостаточно привилегий для изменения расширенных аттрибутов.");
+            extendedAttributesEditorPane_VBox.getChildren().clear();
+            Label accessDenied = new Label("You can not change extended attributes of this file. Required Root privilege.");
+            accessDenied.setWrapText(true);
+            accessDenied.setTextFill(Color.LIGHTCORAL);
+            accessDenied.setEffect(new DropShadow(11.0D, Color.BLACK));
+            accessDenied.setFont(Font.font(Font.getDefault().getName(), FontWeight.BOLD, 14.0D));
+            extendedAttributesEditorPane_VBox.getChildren().add(accessDenied);
+            disableAllEditCheckBoxes();
+            return;
+        }
+        catch (IOException ioException)
+        {
+            ioException.printStackTrace();
+            return;
+        }
+
+        try
+        {
             if (editOwner_CheckBox.isSelected())
             {
                 applyNewOwner();
@@ -1133,6 +1390,7 @@ public class FileAttributesEditor
             return;
         }
 
+
         try
         {
             if (editPermissions_CheckBox.isSelected())
@@ -1169,7 +1427,7 @@ public class FileAttributesEditor
 
 
     /**
-     * Задает новые сведения о дате создания файла, а зодно и о дате последнего чтения
+     * Задает новые сведения о дате создания файла, а заодно и о дате последнего чтения
      * и редактирования. Если изменять только один из этих параметров, то ничего
      * не будет применено.
      */
@@ -1269,6 +1527,19 @@ public class FileAttributesEditor
         posixFileAttributeView.setGroup(newGroupPrincipal[0]);
     }
 
+    private void applyNewExtendedAttribute() throws AccessDeniedException, IOException
+    {
+        UserDefinedFileAttributeView view = Files.getFileAttributeView(targetFile_Path, UserDefinedFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
+
+        String newAttributeName = attributesNames_ComboBox.getValue();
+        String newAttributeValue = extendedAttributeValue_TextField.getText();
+
+        System.out.println("Добавление нового аттрибута с именем " + newAttributeName
+                + ", значением " + newAttributeValue);
+
+        view.write(newAttributeName, Charset.defaultCharset().encode(newAttributeValue));
+    }
+
 
     /**
      * Обрабатывает информацию с CheckBox"ов, и на их основе редактирует права доступа
@@ -1334,6 +1605,8 @@ public class FileAttributesEditor
         editOwner_CheckBox.setDisable(true);
         editGroup_CheckBox.setSelected(false);
         editGroup_CheckBox.setDisable(true);
+        editExtendedAttributes_CheckBox.setSelected(false);
+        editExtendedAttributes_CheckBox.setDisable(true);
     }
 
     private void unselectAllEditCheckBoxes()
@@ -1348,6 +1621,8 @@ public class FileAttributesEditor
         edit_VBox.getChildren().remove(ownerEditorPane_VBox);
         editGroup_CheckBox.setSelected(false);
         edit_VBox.getChildren().remove(groupEditorPane_VBox);
+        editExtendedAttributes_CheckBox.setSelected(false);
+        edit_VBox.getChildren().remove(extendedAttributesEditorPane_VBox);
     }
 
     private void warning_MouseEntered()
@@ -1396,15 +1671,104 @@ public class FileAttributesEditor
 
             DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd, HH:mm:ss");
 
-            ownerValue_Label.setText(posixFileAttributes.owner().getName());
-            groupValue_Label.setText(String.valueOf(posixFileAttributes.group().getName()));
-            sizeBytesValue_Label.setText(NumberFormat.getNumberInstance().format(posixFileAttributes.size()));
-            creationTimeValue_Label.setText(LocalDateTime.ofInstant(basicFileAttributes.creationTime().toInstant(), ZoneId.systemDefault()).format(formatter));
-            lastModifiedValue_Label.setText(LocalDateTime.ofInstant(basicFileAttributes.lastModifiedTime().toInstant(), ZoneId.systemDefault()).format(formatter));
+            ownerAttributeValue_Label.setText(posixFileAttributes.owner().getName());
+            groupAttributeValue_Label.setText(String.valueOf(posixFileAttributes.group().getName()));
+            sizeBytesAttributeValue_Label.setText(NumberFormat.getNumberInstance().format(posixFileAttributes.size()));
+            creationTimeAttributeValue_Label.setText(LocalDateTime.ofInstant(basicFileAttributes.creationTime().toInstant(), ZoneId.systemDefault()).format(formatter));
+            lastModifiedTimeAttributeValue_Label.setText(LocalDateTime.ofInstant(basicFileAttributes.lastModifiedTime().toInstant(), ZoneId.systemDefault()).format(formatter));
+
+            attributes_GridPane.getChildren().clear();
+            attributes_GridPane.addRow(attributes_GridPane.getRowCount(), ownerAttribute_Label, ownerAttributeValue_Label);
+            attributes_GridPane.addRow(attributes_GridPane.getRowCount(), groupAttribute_Label, groupAttributeValue_Label);
+            attributes_GridPane.addRow(attributes_GridPane.getRowCount(), sizeBytesAttribute_Label, sizeBytesAttributeValue_Label);
+            attributes_GridPane.addRow(attributes_GridPane.getRowCount(), creationTimeAttribute_Label, creationTimeAttributeValue_Label);
+            attributes_GridPane.addRow(attributes_GridPane.getRowCount(), lastModifiedTimeAttribute_Label, lastModifiedTimeAttributeValue_Label);
+            attributes_GridPane.add(firstSeparator, 0, attributes_GridPane.getRowCount(), 2, 1);
+
+            //----------------------------------
+            UserDefinedFileAttributeView view = Files.getFileAttributeView(targetFile_Path,
+                    UserDefinedFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
+            List<String> extendedAttributes_List = view.list();
+
+            if (extendedAttributesNames_Label != null)
+            {
+                for (int k = 0; k < extendedAttributesValues_Label.length; k++)
+                {
+                    extendedAttributesValues_Label[k] = null;
+                    extendedAttributesNames_Label[k] = null;
+                }
+            }
+            extendedAttributesValues_Label = null;
+            extendedAttributesNames_Label = null;
+
+            extendedAttributesNames_Label = new Label[extendedAttributes_List.size()];
+            extendedAttributesValues_Label = new Label[extendedAttributes_List.size()];
+
+            Iterator<String> extendedAttributes_Iterator = extendedAttributes_List.iterator();
+            int index = 0;
+            String temporaryName = null;
+            String temporaryValue = null;
+            ByteBuffer buffer;
+
+            while (extendedAttributes_Iterator.hasNext())
+            {
+                temporaryName = extendedAttributes_Iterator.next();
+                buffer = ByteBuffer.allocate(view.size(temporaryName));
+                view.read(temporaryName, buffer);
+                buffer.flip();
+                temporaryValue = Charset.defaultCharset().decode(buffer).toString();
+
+                extendedAttributesNames_Label[index] = new Label(temporaryName + " :");
+                extendedAttributesValues_Label[index] = new Label(temporaryValue);
+                attributes_GridPane.addRow(attributes_GridPane.getRowCount(),
+                        extendedAttributesNames_Label[index], extendedAttributesValues_Label[index]);
+                index++;
+            }
+
+            if (secondSeparator == null)
+            {
+                secondSeparator = new Separator(Orientation.HORIZONTAL);
+            }
+
+            if (extendedAttributes_List.size() > 0)
+            {
+                attributes_GridPane.add(secondSeparator, 0, attributes_GridPane.getRowCount(), 2, 1);
+            }
+            //=======================================
+
+            attributes_GridPane.add(permissionTitle_HBox, 0, attributes_GridPane.getRowCount(), 2, 1);
+
+            //Owner
+            attributes_GridPane.add(readPermissionsIndicator_HBox[0], 1, attributes_GridPane.getRowCount());
+            attributes_GridPane.addRow(attributes_GridPane.getRowCount(), ownerPermissionsBlock_VBox,
+                    writePermissionsIndicator_HBox[0]);
+            attributes_GridPane.add(executePermissionsIndicator_HBox[0], 1, attributes_GridPane.getRowCount());
+            attributes_GridPane.addRow(attributes_GridPane.getRowCount(), new Label());
+
+            //Group
+            attributes_GridPane.add(readPermissionsIndicator_HBox[1], 1, attributes_GridPane.getRowCount());
+            attributes_GridPane.addRow(attributes_GridPane.getRowCount(), groupPermissionsBlock_VBox,
+                    writePermissionsIndicator_HBox[1]);
+            attributes_GridPane.add(executePermissionsIndicator_HBox[1], 1, attributes_GridPane.getRowCount());
+            attributes_GridPane.addRow(attributes_GridPane.getRowCount(), new Label());
+
+            //Other
+            attributes_GridPane.add(readPermissionsIndicator_HBox[2], 1, attributes_GridPane.getRowCount());
+            attributes_GridPane.addRow(attributes_GridPane.getRowCount(), otherPermissionsBlock_VBox,
+                    writePermissionsIndicator_HBox[2]);
+            attributes_GridPane.add(executePermissionsIndicator_HBox[2], 1, attributes_GridPane.getRowCount());
 
             Image granted_Image = new Image(getClass().getResourceAsStream("/Images/granted.png"));
             Image hrenZnayet_Image = new Image(getClass().getResourceAsStream("/Images/cancel.png"));
 
+
+            //Заполняем все ImageView изображениями с запретом
+            for (int k = 0; k < readPermissionsIndicator_ImageView.length; k++)
+            {
+                setImageToImageView(hrenZnayet_Image, readPermissionsIndicator_ImageView[k]);
+                setImageToImageView(hrenZnayet_Image, writePermissionsIndicator_ImageView[k]);
+                setImageToImageView(hrenZnayet_Image, executePermissionsIndicator_ImageView[k]);
+            }
 
             Iterator<PosixFilePermission> iterator = posixFileAttributes.permissions().iterator();
             while (iterator.hasNext())
@@ -1412,86 +1776,40 @@ public class FileAttributesEditor
                 PosixFilePermission temporaryPermission = iterator.next();
                 if (temporaryPermission == PosixFilePermission.OWNER_READ)
                 {
-                    readOwner_HBox.getChildren().remove(readOwner_HBox.getChildren().size() - 1);
-                    addImageViewToHbox(granted_Image, readOwner_HBox);
+                    setImageToImageView(granted_Image, readPermissionsIndicator_ImageView[0]);
                 }
                 else if (temporaryPermission == PosixFilePermission.OWNER_WRITE)
                 {
-                    writeOwner_HBox.getChildren().remove(writeOwner_HBox.getChildren().size() - 1);
-                    addImageViewToHbox(granted_Image, writeOwner_HBox);
+                    setImageToImageView(granted_Image, writePermissionsIndicator_ImageView[0]);
                 }
                 else if (temporaryPermission == PosixFilePermission.OWNER_EXECUTE)
                 {
-                    executableOwner_HBox.getChildren().remove(executableOwner_HBox.getChildren().size() - 1);
-                    addImageViewToHbox(granted_Image, executableOwner_HBox);
+                    setImageToImageView(granted_Image, executePermissionsIndicator_ImageView[0]);
                 }
                 else if (temporaryPermission == PosixFilePermission.GROUP_READ)
                 {
-                    readGroup_HBox.getChildren().remove(readGroup_HBox.getChildren().size() - 1);
-                    addImageViewToHbox(granted_Image, readGroup_HBox);
+                    setImageToImageView(granted_Image, readPermissionsIndicator_ImageView[1]);
                 }
                 else if (temporaryPermission == PosixFilePermission.GROUP_WRITE)
                 {
-                    writeGroup_HBox.getChildren().remove(writeGroup_HBox.getChildren().size() - 1);
-                    addImageViewToHbox(granted_Image, writeGroup_HBox);
+                    setImageToImageView(granted_Image, writePermissionsIndicator_ImageView[1]);
                 }
                 else if (temporaryPermission == PosixFilePermission.GROUP_EXECUTE)
                 {
-                    executeGroup_HBox.getChildren().remove(executeGroup_HBox.getChildren().size() - 1);
-                    addImageViewToHbox(granted_Image, executeGroup_HBox);
+                    setImageToImageView(granted_Image, executePermissionsIndicator_ImageView[1]);
                 }
                 else if (temporaryPermission == PosixFilePermission.OTHERS_READ)
                 {
-                    readOther_HBox.getChildren().remove(readOther_HBox.getChildren().size() - 1);
-                    addImageViewToHbox(granted_Image, readOther_HBox);
+                    setImageToImageView(granted_Image, readPermissionsIndicator_ImageView[2]);
                 }
                 else if (temporaryPermission == PosixFilePermission.OTHERS_WRITE)
                 {
-                    writeOther_HBox.getChildren().remove(writeOther_HBox.getChildren().size() - 1);
-                    addImageViewToHbox(granted_Image, writeOther_HBox);
+                    setImageToImageView(granted_Image, writePermissionsIndicator_ImageView[2]);
                 }
                 else if (temporaryPermission == PosixFilePermission.OTHERS_EXECUTE)
                 {
-                    executeOther_HBox.getChildren().remove(executeOther_HBox.getChildren().size() - 1);
-                    addImageViewToHbox(granted_Image, executeOther_HBox);
+                    setImageToImageView(granted_Image, executePermissionsIndicator_ImageView[2]);
                 }
-            }
-
-            if (readOwner_HBox.getChildren().size() != 2)
-            {
-                addImageViewToHbox(hrenZnayet_Image, readOwner_HBox);
-            }
-            if (writeOwner_HBox.getChildren().size() != 2)
-            {
-                addImageViewToHbox(hrenZnayet_Image, writeOwner_HBox);
-            }
-            if (executableOwner_HBox.getChildren().size() != 2)
-            {
-                addImageViewToHbox(hrenZnayet_Image, executableOwner_HBox);
-            }
-            if (readGroup_HBox.getChildren().size() != 2)
-            {
-                addImageViewToHbox(hrenZnayet_Image, readGroup_HBox);
-            }
-            if (writeGroup_HBox.getChildren().size() != 2)
-            {
-                addImageViewToHbox(hrenZnayet_Image, writeGroup_HBox);
-            }
-            if (executeGroup_HBox.getChildren().size() != 2)
-            {
-                addImageViewToHbox(hrenZnayet_Image, executeGroup_HBox);
-            }
-            if (readOther_HBox.getChildren().size() != 2)
-            {
-                addImageViewToHbox(hrenZnayet_Image, readOther_HBox);
-            }
-            if (writeOther_HBox.getChildren().size() != 2)
-            {
-                addImageViewToHbox(hrenZnayet_Image, writeOther_HBox);
-            }
-            if (executeOther_HBox.getChildren().size() != 2)
-            {
-                addImageViewToHbox(hrenZnayet_Image, executeOther_HBox);
             }
 
         }
@@ -1500,4 +1818,26 @@ public class FileAttributesEditor
             ioException.printStackTrace();
         }
     }
+
+    private void deleteExtendedAttribute_Action(ActionEvent event)
+    {
+        String temporaryAttributeName = attributesNames_ComboBox.getValue();
+
+        try
+        {
+            UserDefinedFileAttributeView view = Files.getFileAttributeView(targetFile_Path,
+                    UserDefinedFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
+            view.delete(temporaryAttributeName);
+            System.out.println("Дополнительный аттрибут с именем " + temporaryAttributeName
+                    + " был удален.");
+
+            attributesNames_ComboBox.getItems().remove(attributesNames_ComboBox.getSelectionModel().getSelectedIndex());
+        }
+        catch (IOException ioException)
+        {
+            ioException.printStackTrace();
+        }
+
+    }
+
 }

@@ -33,6 +33,8 @@ import org.yaldysse.tools.Shell;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
 import java.nio.file.*;
 import java.nio.file.attribute.*;
 import java.time.*;
@@ -941,6 +943,54 @@ public class FM_GUI extends Application
         else if (keyRelease_KeyCode == KeyCode.PAGE_DOWN && event.isControlDown())
         {
             goToNextTab_MenuItem.fire();
+        }
+        else if(keyRelease_KeyCode == KeyCode.F7)
+        {
+            System.out.println("Обработка расшриренных атрибутов.");
+            UserDefinedFileAttributeView view = Files.getFileAttributeView(currentPath.get(currentContentTabIndex)
+                    .resolve(activatedTreeTableView.getSelectionModel().getSelectedItem().getValue().getName()),UserDefinedFileAttributeView.class,LinkOption.NOFOLLOW_LINKS);
+
+            try
+            {
+                List<String> list = view.list();
+                Iterator<String> nameIterator = list.iterator();
+                while(nameIterator.hasNext())
+                {
+                    System.out.println(nameIterator.next());
+                }
+//                String name = "user.mimetype";
+//                ByteBuffer buf = ByteBuffer.allocate(view.size(name));
+//                view.read(name,buf);
+//                String value = Charset.defaultCharset().decode(buf).toString();
+//                System.out.println(name + " = " + value);
+            }
+            catch(IOException ioException)
+            {
+                ioException.printStackTrace();
+            }
+
+        }
+
+        else if(keyRelease_KeyCode == KeyCode.F9)
+        {
+            System.out.println("Запись mime расшриренных атрибутов.");
+            UserDefinedFileAttributeView view = Files.getFileAttributeView(currentPath.get(currentContentTabIndex)
+                    .resolve(activatedTreeTableView.getSelectionModel().getSelectedItem().getValue().getName()),UserDefinedFileAttributeView.class,LinkOption.NOFOLLOW_LINKS);
+
+            try
+            {
+                view.write("pizdun",Charset.defaultCharset().encode("text/html"));
+//                String name = "user.mimetype";
+//                ByteBuffer buf = ByteBuffer.allocate(view.size(name));
+//                view.read(name,buf);
+//                String value = Charset.defaultCharset().decode(buf).toString();
+//                System.out.println(name + " = " + value);
+            }
+            catch(IOException ioException)
+            {
+                ioException.printStackTrace();
+            }
+
         }
 
     }
