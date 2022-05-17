@@ -161,6 +161,8 @@ public class FM_GUI extends Application
     private FlowPane fileStorages_FlowPane;
     //private VBox currentContainerWithFiles_VBox;
     private ScrollPane fileStores_ScrollPane;
+    private Label fileSystemName_Label;
+    private HBox pathAndFileSystemName_HBox;
 
 
     private ArrayList<TreeTableView<FileData>> allTreeTableViewWithFiles_ArrayList;
@@ -633,7 +635,19 @@ public class FM_GUI extends Application
                 goToPath(newPath);
             }
         });
-        //currentPath_TextField.setFocusTraversable(false);
+
+        fileSystemName_Label = new Label("FS");
+        fileSystemName_Label.setTextFill(Color.MEDIUMSEAGREEN);
+        fileSystemName_Label.setBorder(new Border(new BorderStroke(Color.MEDIUMAQUAMARINE,
+                BorderStrokeStyle.SOLID, CornerRadii.EMPTY, new BorderWidths(3.0D))));
+        fileSystemName_Label.setFont(Font.font(Font.getDefault().getName(),
+                FontWeight.BOLD, 14.0D));
+        fileSystemName_Label.setAlignment(Pos.CENTER);
+        fileSystemName_Label.setPadding(new Insets(0.0D, 4.0D, 0.0D, 4.0D));
+
+        pathAndFileSystemName_HBox = new HBox(rem * 0.35D, currentPath_TextField,
+                fileSystemName_Label);
+        HBox.setHgrow(currentPath_TextField,Priority.ALWAYS);
 
         Tab main_Tab = new Tab();
         main_Tab.setClosable(false);
@@ -707,7 +721,7 @@ public class FM_GUI extends Application
 
         content_VBox = new VBox(rem * 0.45D);
         content_VBox.setPadding(new Insets(rem * 0.15D, rem * 0.7D, rem * 0.7D, rem * 0.7D));
-        content_VBox.getChildren().addAll(currentPath_TextField, content_TabPane);
+        content_VBox.getChildren().addAll(pathAndFileSystemName_HBox, content_TabPane);
         VBox.setVgrow(content_VBox, Priority.ALWAYS);
         VBox.setVgrow(content_TabPane, Priority.ALWAYS);
         VBox.setVgrow(files_VBox, Priority.ALWAYS);
@@ -879,7 +893,7 @@ public class FM_GUI extends Application
 //        });
 //        fileStorages_FlowPane.getChildren().add(temporaryFileStore_Button);
 
-
+        fileSystemName_Label.setText("?");
         currentPath_TextField.setText(FIlE_STORES_PATH);
         content_TabPane.getTabs().get(currentContentTabIndex).setText(FIlE_STORES_PATH);
     }
@@ -1138,6 +1152,8 @@ public class FM_GUI extends Application
         try
         {
             updateFilesContent(destinationPath, activatedTreeTableView.getRoot());
+            fileSystemName_Label.setText(Files.getFileStore(destinationPath).type());
+
         }
         catch (IOException ioException)
         {
@@ -1147,6 +1163,7 @@ public class FM_GUI extends Application
         VBox temporaryContainerWithFiles_VBox = allContainersWithFiles_ArrayList.get(currentContentTabIndex);
         temporaryContainerWithFiles_VBox.getChildren().clear();
         temporaryContainerWithFiles_VBox.getChildren().add(activatedTreeTableView);
+
         return true;
     }
 
