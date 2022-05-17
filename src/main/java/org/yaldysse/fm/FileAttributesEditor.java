@@ -1222,6 +1222,13 @@ public class FileAttributesEditor
         extendedAttributeValue_TextField = new TextField();
         extendedAttributeValue_TextField.setPromptText("Enter new value here");
         extendedAttributeValue_TextField.setText("");
+        extendedAttributeValue_TextField.textProperty().addListener((event, value1, value2) ->
+        {
+            if(value2.length() > 255)
+            {
+                extendedAttributeValue_TextField.setText(value1);
+            }
+        });
 
         Label value_Label = new Label("Value");
         value_Label.setTextFill(Color.HONEYDEW);

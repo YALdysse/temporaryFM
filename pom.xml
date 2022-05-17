@@ -6,7 +6,7 @@
 
     <groupId>org.yaldysse.fm</groupId>
     <artifactId>PsevdoFM</artifactId>
-    <version>build_6</version>
+    <version>build_7</version>
 
 <!--    <properties>-->
 <!--        <maven.compiler.release>17</maven.compiler.release>-->
@@ -152,7 +152,6 @@
                     </execution>
                 </executions>
             </plugin>
-
         </plugins>
     </build>
 

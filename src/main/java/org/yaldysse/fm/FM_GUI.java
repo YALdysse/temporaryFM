@@ -30,12 +30,15 @@ import javafx.stage.StageStyle;
 import javafx.stage.Window;
 import javafx.util.Callback;
 import javafx.util.Duration;
+import org.apache.commons.io.FileSystemUtils;
 import org.yaldysse.tools.Shell;
 
+import javax.swing.filechooser.FileSystemView;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.nio.file.attribute.*;
 import java.time.*;
@@ -88,9 +91,9 @@ public class FM_GUI extends Application
 
 
     public static final double rem = new Text("").getBoundsInParent().getHeight();
-    private double preferredWidth = rem * 30.0D;
+    private double preferredWidth = rem * 27.0D;
     private double preferredHeight = rem * 20.0D;
-    public final String FIlE_SYSTEMS_PATH = "file systems:///";
+    public final String FIlE_STORES_PATH = "file stores:///";
     //private Path currentPath;
     private ArrayList<Path> currentPath;
     private TreeTableColumn.SortType sortType;
@@ -155,6 +158,15 @@ public class FM_GUI extends Application
     private Image folderIcon_Image;
     private Image fileIcon_Image;
 
+    private FlowPane fileStorages_FlowPane;
+    //private VBox currentContainerWithFiles_VBox;
+    private ScrollPane fileStores_ScrollPane;
+
+
+    private ArrayList<TreeTableView<FileData>> allTreeTableViewWithFiles_ArrayList;
+    private ArrayList<VBox> allContainersWithFiles_ArrayList;
+
+
     @Override
     public void start(Stage primaryStage) throws Exception
     {
@@ -170,6 +182,8 @@ public class FM_GUI extends Application
         stage.setScene(scene);
         stage.setMinHeight(preferredHeight);
         stage.setMinWidth(preferredWidth);
+        stage.setWidth(preferredWidth);
+        stage.setHeight(preferredHeight);
         stage.show();
     }
 
@@ -191,8 +205,9 @@ public class FM_GUI extends Application
         root.getChildren().addAll(menu_BorderPane, content_VBox);
         activatedTreeTableView.requestFocus();
 
-        goToDriveList();
-        content_TabPane.getSelectionModel().getSelectedItem().setText(FIlE_SYSTEMS_PATH);
+        //goToDriveList();
+        goToFileStoragesPane();
+        content_TabPane.getSelectionModel().getSelectedItem().setText(FIlE_STORES_PATH);
     }
 
     private void initializeMenu()
@@ -205,14 +220,15 @@ public class FM_GUI extends Application
         exit_MenuItem.setAccelerator(new KeyCodeCombination(KeyCode.Q, KeyCombination.CONTROL_DOWN));
 
         copyFileName_MenuItem = new MenuItem("Copy name of file");
-        copyFileName_MenuItem.setAccelerator(new KeyCodeCombination(KeyCode.C, KeyCombination.SHIFT_DOWN));
+        copyFileName_MenuItem.setAccelerator(new KeyCodeCombination(KeyCode.C, KeyCombination.ALT_DOWN));
         copyFileName_MenuItem.setOnAction(event ->
         {
             copyFileName_MenuItem_Action(event);
         });
 
         copyAbsoluteNamePath_MenuItem = new MenuItem("Copy absolute path of file");
-        copyAbsoluteNamePath_MenuItem.setAccelerator(new KeyCodeCombination(KeyCode.C, KeyCombination.ALT_DOWN));
+        copyAbsoluteNamePath_MenuItem.setAccelerator(new KeyCodeCombination(KeyCode.C, KeyCombination.CONTROL_DOWN,
+                KeyCombination.ALT_DOWN));
         copyAbsoluteNamePath_MenuItem.setOnAction(event ->
         {
             copyAbsoluteNamePath_MenuItem_Action(event);
@@ -238,7 +254,8 @@ public class FM_GUI extends Application
         goToRootDirectories_MenuItem = new MenuItem("Root directories");
         goToRootDirectories_MenuItem.setOnAction(event ->
         {
-            goToDriveList();
+            //goToDriveList();
+            goToFileStoragesPane();
         });
         goToRootDirectories_MenuItem.setAccelerator(new KeyCodeCombination(KeyCode.SLASH, KeyCodeCombination.ALT_DOWN));
 
@@ -619,7 +636,6 @@ public class FM_GUI extends Application
         //currentPath_TextField.setFocusTraversable(false);
 
         Tab main_Tab = new Tab();
-        main_Tab.setContent(content_TreeTableView);
         main_Tab.setClosable(false);
 
         currentContentTabIndex = 0;
@@ -633,18 +649,19 @@ public class FM_GUI extends Application
                     + content_TabPane.getSelectionModel().getSelectedIndex());
             currentContentTabIndex = content_TabPane.getSelectionModel().getSelectedIndex();
 
-            activatedTreeTableView = (TreeTableView<FileData>) content_TabPane.getSelectionModel().getSelectedItem().getContent();
+            activatedTreeTableView = allTreeTableViewWithFiles_ArrayList.get(currentContentTabIndex);
             currentNameColumn = findColumnByStringID(NAME_COLUMN_ID);
             currentTypeColumn = findColumnByStringID(TYPE_COLUMN_ID);
             currentOwnerColumn = findColumnByStringID(OWNER_COLUMN_ID);
             currentCreationTimeColumn = findColumnByStringID(CREATION_TIME_COLUMN_ID);
             currentLastModifiedTimeColumn = findColumnByStringID(LAST_MODIFIED_TIME_COLUMN_ID);
 
+            //----------------
+
             System.out.println("size: " + currentPath.size());
             goToPath(currentPath.get(currentContentTabIndex));
 
             System.out.println("Запрос на фоку.");
-//            activatedTreeTableView.requestFocus();
 
             Platform.runLater(() ->
             {
@@ -653,6 +670,9 @@ public class FM_GUI extends Application
         });
 
         currentPath = new ArrayList<>();
+        allContainersWithFiles_ArrayList = new ArrayList<>();
+        allTreeTableViewWithFiles_ArrayList = new ArrayList<>();
+        allTreeTableViewWithFiles_ArrayList.add(content_TreeTableView);
 
         activatedTreeTableView = content_TreeTableView;
         currentNameColumn = nameColumn;
@@ -663,11 +683,314 @@ public class FM_GUI extends Application
         currentTypeColumn = typeColumn;
         currentSizeBytesColumn = sizeBytesColumn;
 
+        fileStorages_FlowPane = new FlowPane(rem * 1.5D, rem * 0.7D);
+        fileStorages_FlowPane.setPadding(new Insets(rem * 1.2D, rem * 0.5D, rem * 0.80D,
+                rem * 0.5D));
+        fileStorages_FlowPane.setAlignment(Pos.CENTER);
+
+        fileStores_ScrollPane = new ScrollPane();
+        fileStores_ScrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        fileStores_ScrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        fileStores_ScrollPane.setFitToWidth(true);
+        fileStores_ScrollPane.setFitToHeight(true);
+        fileStores_ScrollPane.setContent(fileStorages_FlowPane);
+
+        VBox files_VBox = new VBox(rem * 0.45D);
+        files_VBox.getChildren().add(fileStores_ScrollPane);
+//        files_VBox.setBackground(new Background(new BackgroundFill(Color.BLACK,
+//                CornerRadii.EMPTY, Insets.EMPTY)));
+
+
+        main_Tab.setContent(files_VBox);
+
+        allContainersWithFiles_ArrayList.add(files_VBox);
+
         content_VBox = new VBox(rem * 0.45D);
         content_VBox.setPadding(new Insets(rem * 0.15D, rem * 0.7D, rem * 0.7D, rem * 0.7D));
         content_VBox.getChildren().addAll(currentPath_TextField, content_TabPane);
+        VBox.setVgrow(content_VBox, Priority.ALWAYS);
+        VBox.setVgrow(content_TabPane, Priority.ALWAYS);
+        VBox.setVgrow(files_VBox, Priority.ALWAYS);
+        VBox.setVgrow(content_TreeTableView, Priority.ALWAYS);
+
     }
 
+    private void goToFileStoragesPane()
+    {
+        fileStorages_FlowPane.getChildren().clear();
+
+        VBox temporaryContainerWithFiles_VBox = allContainersWithFiles_ArrayList.get(currentContentTabIndex);
+        temporaryContainerWithFiles_VBox.getChildren().clear();
+        temporaryContainerWithFiles_VBox.getChildren().add(fileStores_ScrollPane);
+
+        FileSystem defaultFileSystem = FileSystems.getDefault();
+
+        String temporaryFileStorageName = null;
+        String temporaryFileStorageFirstName = null;
+        String temporaryFileStorageSecondName = null;
+        String buttonName = null;
+
+        boolean defineMethod = true;
+        boolean useFirstName = false;
+        boolean useSecondName = false;
+        boolean useSecondAndSeparatorName = false;
+        Path resultPath = null;
+
+        for (FileStore fileStore : FileSystems.getDefault().getFileStores())
+        {
+            temporaryFileStorageName = fileStore.toString();
+
+            if (temporaryFileStorageName.indexOf("(") == 0)
+            {
+                temporaryFileStorageFirstName = "";
+            }
+            else
+            {
+                temporaryFileStorageFirstName = temporaryFileStorageName.substring(0,
+                        temporaryFileStorageName.indexOf("(") - 1);
+            }
+            temporaryFileStorageSecondName = temporaryFileStorageName.substring(
+                    temporaryFileStorageName.indexOf("(") + 1, temporaryFileStorageName.indexOf(")"));
+            System.out.println("First: '" + temporaryFileStorageFirstName + "'");
+            System.out.println("Second: '" + temporaryFileStorageSecondName + "'");
+
+            //----------------------------
+            if (defineMethod)
+            {
+                File temporaryFile = new File(temporaryFileStorageFirstName);
+                if (temporaryFile.exists())
+                {
+                    useFirstName = true;
+                    buttonName = temporaryFileStorageFirstName;
+                    System.out.println("Существует");
+                }
+                else
+                {
+                    useFirstName = false;
+                    System.out.println("Несуществууут");
+                }
+
+                //Скорее всего Windows гафно!
+                if (!useFirstName)
+                {
+                    temporaryFile = new File(temporaryFileStorageSecondName + defaultFileSystem.getSeparator());
+                    if (temporaryFile.exists())
+                    {
+                        useSecondName = true;
+                        buttonName = temporaryFileStorageName;
+                        System.out.println("Существует");
+                    }
+                    else
+                    {
+                        useSecondName = false;
+                        System.out.println("Не существует");
+                    }
+                }
+                //Скорее всего Windows, но нужно добавить разделитель
+                if (!useSecondName && !useFirstName)
+                {
+                    temporaryFile = new File(temporaryFileStorageSecondName
+                            + defaultFileSystem.getSeparator());
+                    if (temporaryFile.exists())
+                    {
+                        useSecondAndSeparatorName = true;
+                        buttonName = temporaryFileStorageName;
+                        System.out.println("Существует");
+                    }
+                    else
+                    {
+                        useSecondAndSeparatorName = false;
+                        System.out.println("Несуществууут");
+                    }
+                }
+                Path temporaryPath = temporaryFile.toPath();
+                System.out.println("temporaryPath: " + temporaryPath);
+                System.out.println("temporaryPathAbsolute: " + temporaryPath.toAbsolutePath());
+
+                resultPath = temporaryPath.toAbsolutePath();
+                System.out.println("Result: " + resultPath);
+                defineMethod = false;
+            }
+            else
+            {
+                Path temporaryPath = null;
+
+                if (useFirstName)
+                {
+                    temporaryPath = new File(temporaryFileStorageFirstName).toPath();
+                    buttonName = temporaryFileStorageFirstName;
+                }
+                else if (useSecondName)
+                {
+                    temporaryPath = new File(temporaryFileStorageSecondName).toPath();
+                    buttonName = temporaryFileStorageName;
+                }
+                else if (useSecondAndSeparatorName)
+                {
+                    temporaryPath = new File(temporaryFileStorageSecondName + defaultFileSystem.getSeparator()).toPath();
+                    buttonName = temporaryFileStorageName;
+                }
+//                System.out.println("ResultPath: " + temporaryPath.toString());
+//                System.out.println("ResultPath: " + temporaryPath.toAbsolutePath().toString());
+                resultPath = temporaryPath.toAbsolutePath();
+                System.out.println("Result: " + resultPath);
+            }
+
+
+            FileStorageButton temporaryFileStore_Button = new FileStorageButton(buttonName,
+                    resultPath);
+            temporaryFileStore_Button.setOnAction(event ->
+            {
+                FileStorageButton temporaryButton = (FileStorageButton) event.getSource();
+                goToPath(temporaryButton.getFileStoragePath());
+                temporaryContainerWithFiles_VBox.getChildren().clear();
+                temporaryContainerWithFiles_VBox.getChildren().add(activatedTreeTableView);
+            });
+            fileStorages_FlowPane.getChildren().add(temporaryFileStore_Button);
+            //==================================================== Удалить!!!!
+            //break;
+        }
+
+
+//        for (FileStore fileStore : FileSystems.getDefault().getFileStores())
+//        {
+//            temporaryFileStorageName = fileStore.toString();
+//            System.out.println("======"
+//                    + "\nFileStore.toString(): " + fileStore.toString()
+//                    + "\nFileStore.name(): " + fileStore.name());
+//
+//
+//
+//
+//        }
+
+//        Path targetPath = null;
+//
+//
+//
+//        FileStorageButton temporaryFileStore_Button = new FileStorageButton(temporaryFileStorageFirstName,
+//                targetPath);
+//        temporaryFileStore_Button.setOnAction(event ->
+//        {
+//            FileStorageButton temporaryButton = (FileStorageButton) event.getSource();
+//            goToPath(temporaryButton.getFileStoragePath());
+//            temporaryContainerWithFiles_VBox.getChildren().clear();
+//            temporaryContainerWithFiles_VBox.getChildren().add(activatedTreeTableView);
+//        });
+//        fileStorages_FlowPane.getChildren().add(temporaryFileStore_Button);
+
+
+        currentPath_TextField.setText(FIlE_STORES_PATH);
+        content_TabPane.getTabs().get(currentContentTabIndex).setText(FIlE_STORES_PATH);
+    }
+
+    private ArrayList<Path> defineDrives()
+    {
+        FileSystem defaultFileSystem = FileSystems.getDefault();
+
+        String temporaryFileStorageName = null;
+        String temporaryFileStorageFirstName = null;
+        String temporaryFileStorageSecondName = null;
+
+        boolean defineMethod = true;
+        boolean useFirstName = false;
+        boolean useSecondName = false;
+        boolean useSecondAndSeparatorName = false;
+
+        ArrayList<Path> resultPaths = new ArrayList<>();
+
+        for (FileStore fileStore : FileSystems.getDefault().getFileStores())
+        {
+            temporaryFileStorageName = fileStore.toString();
+
+            if (temporaryFileStorageName.indexOf("(") == 0)
+            {
+                temporaryFileStorageFirstName = "";
+            }
+            else
+            {
+                temporaryFileStorageFirstName = temporaryFileStorageName.substring(0,
+                        temporaryFileStorageName.indexOf("(") - 1);
+            }
+            temporaryFileStorageSecondName = temporaryFileStorageName.substring(
+                    temporaryFileStorageName.indexOf("(") + 1, temporaryFileStorageName.indexOf(")"));
+            System.out.println("First: '" + temporaryFileStorageFirstName + "'");
+            System.out.println("Second: '" + temporaryFileStorageSecondName + "'");
+
+            //----------------------------
+            if (defineMethod)
+            {
+                File temporaryFile = new File(temporaryFileStorageFirstName);
+                if (temporaryFile.exists())
+                {
+                    useFirstName = true;
+                    System.out.println("Существует");
+                }
+                else
+                {
+                    useFirstName = false;
+                    System.out.println("Несуществууут");
+                }
+
+                //Скорее всего Windows
+                if (!useFirstName)
+                {
+                    temporaryFile = new File(temporaryFileStorageSecondName);
+                    if (temporaryFile.exists())
+                    {
+                        useSecondName = true;
+                        System.out.println("Существует");
+                    }
+                    else
+                    {
+                        useSecondName = false;
+                        System.out.println("Несуществууут");
+                    }
+                }
+                //Скорее всего Windows, но нужно добавить разделитель
+                if (!useSecondName)
+                {
+                    temporaryFile = new File(temporaryFileStorageFirstName
+                            + defaultFileSystem.getSeparator());
+                    if (temporaryFile.exists())
+                    {
+                        useSecondAndSeparatorName = true;
+                        System.out.println("Существует");
+                    }
+                    else
+                    {
+                        useSecondAndSeparatorName = false;
+                        System.out.println("Несуществууут");
+                    }
+                }
+                defineMethod = false;
+            }
+            else
+            {
+                Path temporaryPath = null;
+
+                if (useFirstName)
+                {
+                    temporaryPath = new File(temporaryFileStorageFirstName).toPath();
+                }
+                else if (useSecondName)
+                {
+                    temporaryPath = new File(temporaryFileStorageSecondName).toPath();
+                }
+                else if (useSecondAndSeparatorName)
+                {
+                    temporaryPath = new File(temporaryFileStorageSecondName + defaultFileSystem.getSeparator()).toPath();
+                }
+//                System.out.println("ResultPath: " + temporaryPath.toString());
+//                System.out.println("ResultPath: " + temporaryPath.toAbsolutePath().toString());
+                temporaryPath = temporaryPath.toAbsolutePath();
+                System.out.println("Result: " + temporaryPath);
+                resultPaths.add(temporaryPath);
+            }
+
+        }
+        return resultPaths;
+    }
 
     private void initializeContextMenuForColumns()
     {
@@ -775,14 +1098,6 @@ public class FM_GUI extends Application
         if (!Files.exists(destinationPath))
         {
             System.out.println("Данного пути не существует.");
-            if (currentPath.get(currentContentTabIndex) == null)
-            {
-                currentPath_TextField.setText(FIlE_SYSTEMS_PATH);
-            }
-            else
-            {
-                currentPath_TextField.setText(currentPath.get(currentContentTabIndex).toAbsolutePath().toString());
-            }
             return false;
         }
         if (Files.isRegularFile(destinationPath))
@@ -798,6 +1113,7 @@ public class FM_GUI extends Application
         System.out.println("destination: " + destinationPath);
 
         currentPath_TextField.setText(destinationPath.toAbsolutePath().toString());
+
         if (currentPath.size() != 0)
         {
             currentPath.remove(currentContentTabIndex);
@@ -827,6 +1143,10 @@ public class FM_GUI extends Application
         {
             ioException.printStackTrace();
         }
+
+        VBox temporaryContainerWithFiles_VBox = allContainersWithFiles_ArrayList.get(currentContentTabIndex);
+        temporaryContainerWithFiles_VBox.getChildren().clear();
+        temporaryContainerWithFiles_VBox.getChildren().add(activatedTreeTableView);
         return true;
     }
 
@@ -975,6 +1295,14 @@ public class FM_GUI extends Application
         else if (keyRelease_KeyCode == KeyCode.PAGE_DOWN && event.isControlDown())
         {
             goToNextTab_MenuItem.fire();
+        }
+        else if (keyRelease_KeyCode == KeyCode.SLASH)
+        {
+            System.out.println("Переходим к вводу пути...");
+            Platform.runLater(() ->
+            {
+                currentPath_TextField.requestFocus();
+            });
         }
     }
 
@@ -1309,11 +1637,20 @@ public class FM_GUI extends Application
     private void copyAbsoluteNamePath_MenuItem_Action(ActionEvent event)
     {
         ClipboardContent clipboardContent = new ClipboardContent();
-        clipboardContent.putString(currentPath.get(currentContentTabIndex).resolve(activatedTreeTableView.getSelectionModel().
-                getSelectedItem().getValue().getName()).toAbsolutePath().toString());
-        if (Clipboard.getSystemClipboard().setContent(clipboardContent))
+
+        if (currentPath != null && currentPath.size() > currentContentTabIndex &&
+                currentPath.get(currentContentTabIndex) != null)
         {
-            showLittleNotification(stage, "Absolute path of selected file has been copied.", 3);
+            clipboardContent.putString(currentPath.get(currentContentTabIndex).resolve(activatedTreeTableView.getSelectionModel().
+                    getSelectedItem().getValue().getName()).toAbsolutePath().toString());
+            if (Clipboard.getSystemClipboard().setContent(clipboardContent))
+            {
+                showLittleNotification(stage, "Absolute path of selected file has been copied.", 3);
+            }
+        }
+        else
+        {
+            System.out.println("Невозможно скопировать абсолютный путь, т.к. он пустой.");
         }
     }
 
@@ -2031,12 +2368,15 @@ public class FM_GUI extends Application
         String temporaryFileStorePath = null;
         for (FileStore temporaryFileStore : fileStores_Iterable)
         {
+            System.out.println("name: " + temporaryFileStore.name());
             temporaryFileStorePath = temporaryFileStore.toString();
-            temporaryFileStorePath = temporaryFileStorePath.substring(0,
-                    temporaryFileStorePath.indexOf('(') - 1);
-            addCustomToContentInTable(activatedTreeTableView.getRoot(), FIlE_SYSTEMS_PATH, temporaryFileStorePath);
+            //System.out.println(temporaryFileStorePath);
+//            temporaryFileStorePath = temporaryFileStorePath.substring(0,
+//                    temporaryFileStorePath.indexOf('(') - 1);
+            addCustomToContentInTable(activatedTreeTableView.getRoot(), FIlE_STORES_PATH, temporaryFileStorePath);
         }
-        currentPath_TextField.setText(FIlE_SYSTEMS_PATH);
+        currentPath_TextField.setText(FIlE_STORES_PATH);
+        content_TabPane.getSelectionModel().getSelectedItem().setText(FIlE_STORES_PATH);
     }
 
 
@@ -2089,6 +2429,7 @@ public class FM_GUI extends Application
             {
                 CustomTreeTableCell<FileData, String> temporaryCell = new CustomTreeTableCell<>();
                 //temporaryCell.setTextFill(Color.LIGHTSKYBLUE);
+                temporaryCell.setPadding(new Insets(0.0D, 0.0D, 0.0, rem * 0.2D));
                 temporaryCell.setOnMouseClicked(event ->
                 {
                     cellMouseClicked_Action(event);
@@ -2235,11 +2576,29 @@ public class FM_GUI extends Application
         newTreeTableView.setShowRoot(false);
         newTreeTableView.getSortOrder().addAll(newNameColumn, newTypeColumn);
 
-        newTab.setContent(newTreeTableView);
+        VBox files_VBox = new VBox(rem * 0.45D);
+        files_VBox.getChildren().add(newTreeTableView);
+
+        ScrollPane newFiles_ScrollPane = new ScrollPane();
+        newFiles_ScrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        newFiles_ScrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        newFiles_ScrollPane.setContent(files_VBox);
+        newFiles_ScrollPane.setFitToWidth(true);
+        newFiles_ScrollPane.setFitToHeight(true);
+
+        newTab.setContent(newFiles_ScrollPane);
+        newTab.setOnCloseRequest(eventCloseRequest ->
+        {
+            currentPath.remove(currentContentTabIndex);
+        });
+
         content_TabPane.getTabs().add(newTab);
 
+        allTreeTableViewWithFiles_ArrayList.add(newTreeTableView);
+        allContainersWithFiles_ArrayList.add(files_VBox);
+
         //Каждая открытая вкладка наследует путь от текущей
-        if (currentPath.size() > 0 &&
+        if (currentPath.size() > currentContentTabIndex &&
                 currentPath.get(currentContentTabIndex) != null)
         {
             currentPath.add(currentPath.get(currentContentTabIndex));
