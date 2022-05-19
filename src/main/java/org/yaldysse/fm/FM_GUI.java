@@ -10,6 +10,7 @@ import javafx.beans.property.ReadOnlyStringWrapper;
 import javafx.collections.ObservableList;
 import javafx.event.ActionEvent;
 import javafx.event.EventHandler;
+import javafx.geometry.HPos;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
@@ -24,14 +25,12 @@ import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.scene.text.Text;
-import javafx.stage.Modality;
-import javafx.stage.Stage;
-import javafx.stage.StageStyle;
-import javafx.stage.Window;
+import javafx.stage.*;
 import javafx.util.Callback;
 import javafx.util.Duration;
 import org.apache.commons.io.FileSystemUtils;
 import org.yaldysse.tools.Shell;
+import org.yaldysse.tools.StorageCapacity;
 
 import javax.swing.filechooser.FileSystemView;
 import java.io.File;
@@ -164,10 +163,13 @@ public class FM_GUI extends Application
     private Label fileSystemName_Label;
     private HBox pathAndFileSystemName_HBox;
 
+    private FileStoreInfoPopup fileStore_Popup;
 
     private ArrayList<TreeTableView<FileData>> allTreeTableViewWithFiles_ArrayList;
     private ArrayList<VBox> allContainersWithFiles_ArrayList;
 
+    private Color[] textColorForFileSystemName_Color;
+    private Color[] borderColorForFileSystemName_Color;
 
     @Override
     public void start(Stage primaryStage) throws Exception
@@ -182,8 +184,8 @@ public class FM_GUI extends Application
         initializeComponents();
 
         stage.setScene(scene);
-        stage.setMinHeight(preferredHeight);
-        stage.setMinWidth(preferredWidth);
+        stage.setMinHeight(preferredHeight-2);
+        stage.setMinWidth(preferredWidth-2);
         stage.setWidth(preferredWidth);
         stage.setHeight(preferredHeight);
         stage.show();
@@ -636,6 +638,11 @@ public class FM_GUI extends Application
             }
         });
 
+        textColorForFileSystemName_Color = new Color[]{Color.MEDIUMSEAGREEN,
+                Color.DARKVIOLET};
+        borderColorForFileSystemName_Color = new Color[]{Color.MEDIUMAQUAMARINE,
+                Color.MEDIUMORCHID};
+
         fileSystemName_Label = new Label("FS");
         fileSystemName_Label.setTextFill(Color.MEDIUMSEAGREEN);
         fileSystemName_Label.setBorder(new Border(new BorderStroke(Color.MEDIUMAQUAMARINE,
@@ -644,10 +651,11 @@ public class FM_GUI extends Application
                 FontWeight.BOLD, 14.0D));
         fileSystemName_Label.setAlignment(Pos.CENTER);
         fileSystemName_Label.setPadding(new Insets(0.0D, 4.0D, 0.0D, 4.0D));
+        fileSystemName_Label.setOnMouseClicked(this::fileSystemName_MouseEnteredAction);
 
         pathAndFileSystemName_HBox = new HBox(rem * 0.35D, currentPath_TextField,
                 fileSystemName_Label);
-        HBox.setHgrow(currentPath_TextField,Priority.ALWAYS);
+        HBox.setHgrow(currentPath_TextField, Priority.ALWAYS);
 
         Tab main_Tab = new Tab();
         main_Tab.setClosable(false);
@@ -1152,8 +1160,6 @@ public class FM_GUI extends Application
         try
         {
             updateFilesContent(destinationPath, activatedTreeTableView.getRoot());
-            fileSystemName_Label.setText(Files.getFileStore(destinationPath).type());
-
         }
         catch (IOException ioException)
         {
@@ -1161,8 +1167,15 @@ public class FM_GUI extends Application
         }
 
         VBox temporaryContainerWithFiles_VBox = allContainersWithFiles_ArrayList.get(currentContentTabIndex);
-        temporaryContainerWithFiles_VBox.getChildren().clear();
-        temporaryContainerWithFiles_VBox.getChildren().add(activatedTreeTableView);
+
+        if (!temporaryContainerWithFiles_VBox.getChildren().contains(activatedTreeTableView))
+        {
+            System.out.println("Добавляем таблицу");
+            temporaryContainerWithFiles_VBox.getChildren().clear();
+            temporaryContainerWithFiles_VBox.getChildren().add(activatedTreeTableView);
+        }
+
+        changeFileSystemLabelTextAndColor();
 
         return true;
     }
@@ -2743,6 +2756,66 @@ public class FM_GUI extends Application
 //        {
 //            InterruptedException.printStackTrace();
 //        }
+    }
+
+    private void fileSystemName_MouseEnteredAction(MouseEvent event)
+    {
+        if (fileStore_Popup == null)
+        {
+            fileStore_Popup = new FileStoreInfoPopup(currentPath.get(
+                    currentContentTabIndex));
+        }
+
+
+        if(fileStore_Popup.isShowing())
+        {
+            fileStore_Popup.hide();
+        }
+        else
+        {
+            fileStore_Popup.updateData(currentPath.get(currentContentTabIndex));
+            fileStore_Popup.show(stage);
+            double labelWidth = fileSystemName_Label.getBoundsInParent().getWidth();
+            double labelHeight = fileSystemName_Label.getBoundsInParent().getHeight();
+            fileStore_Popup.setX(fileSystemName_Label.localToScreen(
+                    fileSystemName_Label.getBoundsInLocal()).getMinX());
+            fileStore_Popup.setY(fileSystemName_Label.localToScreen(
+                    fileSystemName_Label.getBoundsInLocal()).getMinY()  +
+                    fileSystemName_Label.getBoundsInParent().getHeight() + labelHeight*0.2D);
+        }
+    }
+
+
+    /**Изменяет цвет рамки и текста текущей файловой системы на один из
+     * заранее подготовленых цветов. Смена происходит в случае смены файловой
+     * системы.*/
+    private void changeFileSystemLabelTextAndColor()
+    {
+        try
+        {
+            String newFileSystemName = Files.getFileStore(currentPath.
+                    get(currentContentTabIndex)).type();
+
+            if(!fileSystemName_Label.getText().equals(newFileSystemName))
+            {
+                System.out.println("Нужно сменить цвет.");
+                int newColorIndex = new Random().nextInt(textColorForFileSystemName_Color.length);
+                fileSystemName_Label.setTextFill(textColorForFileSystemName_Color[newColorIndex]);
+                fileSystemName_Label.setBorder(new Border(new BorderStroke(
+                        borderColorForFileSystemName_Color[newColorIndex],BorderStrokeStyle.SOLID,
+                        CornerRadii.EMPTY, fileSystemName_Label.getBorder().getStrokes()
+                        .get(0).getWidths())));
+
+            }
+
+
+            fileSystemName_Label.setText(newFileSystemName);
+        }
+        catch(IOException ioException)
+        {
+            ioException.printStackTrace();
+        }
+
     }
 }
 
