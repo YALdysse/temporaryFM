@@ -49,8 +49,6 @@ import java.util.stream.Stream;
 
 /**
  * Нужно сделать:
- * 1 [Ошибка]: Если открыть новую вкладку, вернуться на предыдущие, перейти в корень, а
- * потом на следующую вкладку, то будет сгенерировать исключительная ситуация.
  * 3 [Функционал]: Редактор аттрибутов.
  * 4 [Функционал]: Авто обновление таблицы файлов.
  * 5 [Функционал]: Реализовать возврат предыдущего выделения при переходе в родительский каталог,
@@ -1186,7 +1184,7 @@ public class FM_GUI extends Application
     private boolean updateFilesContent(final Path destinationPath, TreeItem<FileData> currentRootItem) throws IOException
     {
         long startTime = System.currentTimeMillis();
-        System.out.println("updatePath: " + destinationPath);
+
         currentRootItem.getChildren().clear();
 
         try (Stream<Path> filesStream = Files.list(destinationPath))
@@ -1216,6 +1214,12 @@ public class FM_GUI extends Application
                     temporaryFileData.setFile(Files.isRegularFile(temporaryPath));
                     temporaryFileData.setSymbolicLink(Files.isSymbolicLink(temporaryPath));
 
+                    if(temporaryFileData.isSymbolicLink())
+                    {
+                        Path temporaryCurrentPath = currentPath.get(currentContentTabIndex);
+                        Path symbolicLinkPath = Files.readSymbolicLink(temporaryCurrentPath.resolve(temporaryPath.getFileName()));
+                        temporaryFileData.setSymbolicLinkPath(temporaryCurrentPath.resolve(symbolicLinkPath));
+                    }
 
                     TreeItem<FileData> temporaryTreeItem = new TreeItem<>(temporaryFileData);
                     if (temporaryFileData.isDirectory())
@@ -1226,6 +1230,10 @@ public class FM_GUI extends Application
                     {
                         applyIconForTreeItem(temporaryTreeItem, fileIcon_Image, fileIconHeight);
                     }
+                    //if(temporaryFileData.isSymbolicLink())
+                    //{
+                        //applyIconForTreeItem(temporaryTreeItem, fileIcon_Image, fileIconHeight);
+                    //}
 
                     currentRootItem.getChildren().add(temporaryTreeItem);
                 }

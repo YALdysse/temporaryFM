@@ -3,6 +3,8 @@ package org.yaldysse.fm;
 import org.yaldysse.tools.StorageCapacity;
 
 import java.io.File;
+import java.nio.file.LinkOption;
+import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -26,6 +28,7 @@ public class FileData
     private boolean hasDirectory;
     private boolean hasFile;
     private boolean hasSymbolicLink;
+    private Path symbolicLinkPath;
 
     public FileData(String aName, long aSize)
     {
@@ -108,9 +111,19 @@ public class FileData
         hasFile = aFile;
     }
 
+
     public void setSymbolicLink(boolean symbolicLink)
     {
         this.hasSymbolicLink = symbolicLink;
+    }
+
+    public void setSymbolicLinkPath(final Path targetPath)
+    {
+        if (targetPath == null)
+        {
+            return;
+        }
+        symbolicLinkPath = targetPath;
     }
 
     public String getName()
@@ -125,7 +138,7 @@ public class FileData
 
     public String getSize(boolean value)
     {
-        if(size_StorageCapacity==null)
+        if (size_StorageCapacity == null)
         {
             return "";
         }
@@ -153,7 +166,9 @@ public class FileData
         //return lastModifiedTime.to(timeUnit);
     }
 
-    /**Возвращает дату и время последнего изменения в заданном формате.*/
+    /**
+     * Возвращает дату и время последнего изменения в заданном формате.
+     */
     public String getLastModifiedTime(DateTimeFormatter formatter)
     {
         if (lastModifiedTime == null)
@@ -187,17 +202,24 @@ public class FileData
 
     public String getType()
     {
-        if (hasDirectory)
+        if (hasSymbolicLink)
+        {
+            if (hasDirectory)
+            {
+                return "Symbolic link at directory " + symbolicLinkPath.toAbsolutePath().toString();
+            }
+            else if (hasFile)
+            {
+                return "Symbolic link at file " + symbolicLinkPath.toAbsolutePath().toString();
+            }
+        }
+        else if (hasDirectory)
         {
             return "Directory";
         }
         else if (hasFile)
         {
             return "File";
-        }
-        else if (hasSymbolicLink)
-        {
-            return "Symbolic Link";
         }
         return "Other";
     }
@@ -209,7 +231,7 @@ public class FileData
 
     public short isDirectory(boolean value)
     {
-        return hasDirectory==true ? (short)1 : (short)0;
+        return hasDirectory == true ? (short) 1 : (short) 0;
     }
 
     public boolean isFile()
