@@ -207,6 +207,11 @@ public class FileData
         return hasDirectory;
     }
 
+    public short isDirectory(boolean value)
+    {
+        return hasDirectory==true ? (short)1 : (short)0;
+    }
+
     public boolean isFile()
     {
         return hasFile;

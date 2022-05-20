@@ -55,7 +55,6 @@ import java.util.stream.Stream;
  * 4 [Функционал]: Авто обновление таблицы файлов.
  * 5 [Функционал]: Реализовать возврат предыдущего выделения при переходе в родительский каталог,
  * но только на один уровень.
- * 6 [Функционал]: Не правильная сортировка по размеру из-за типа данных String.
  */
 public class FM_GUI extends Application
 {
@@ -83,6 +82,7 @@ public class FM_GUI extends Application
      * обновлены.
      */
     private CustomTreeTableColumn<FileData, Long> currentSizeBytesColumn;
+    private CustomTreeTableColumn<FileData, Short> currentIsDirectoryColumn;
     private CustomTreeTableColumn<FileData, String> currentTypeColumn;
     private CustomTreeTableColumn<FileData, String> currentCreationTimeColumn;
     private CustomTreeTableColumn<FileData, String> currentOwnerColumn;
@@ -152,6 +152,7 @@ public class FM_GUI extends Application
     public final String OWNER_COLUMN_ID = "OWNER";
     public final String CREATION_TIME_COLUMN_ID = "CREATION_TIME";
     public final String LAST_MODIFIED_TIME_COLUMN_ID = "LAST_MODIFIED_TIME";
+    public final String SIZE_BYTES_COLUMN_ID = "SIZE_BYTES";
 
     private Font cellFont;
     private Image folderIcon_Image;
@@ -167,6 +168,7 @@ public class FM_GUI extends Application
 
     private ArrayList<TreeTableView<FileData>> allTreeTableViewWithFiles_ArrayList;
     private ArrayList<VBox> allContainersWithFiles_ArrayList;
+    private ArrayList<CustomTreeTableColumn<FileData, Short>> allIsDirectoryColumns_ArrayList;
 
     private Color[] textColorForFileSystemName_Color;
     private Color[] borderColorForFileSystemName_Color;
@@ -184,8 +186,8 @@ public class FM_GUI extends Application
         initializeComponents();
 
         stage.setScene(scene);
-        stage.setMinHeight(preferredHeight-2);
-        stage.setMinWidth(preferredWidth-2);
+        stage.setMinHeight(preferredHeight - 2);
+        stage.setMinWidth(preferredWidth - 2);
         stage.setWidth(preferredWidth);
         stage.setHeight(preferredHeight);
         stage.show();
@@ -537,19 +539,13 @@ public class FM_GUI extends Application
         sizeBytesColumn.setPrefWidth(preferredWidth * 0.15D);
         sizeBytesColumn.setId(SIZE_COLUMN_ID);
         sizeBytesColumn.setVisible(false);
-        sizeBytesColumn.visibleProperty().addListener(event ->
-        {
-            if (!activatedTreeTableView.getColumns().contains(currentSizeBytesColumn))
-            {
-                activatedTreeTableView.getColumns().add(currentSizeBytesColumn);
-            }
-            if (sizeBytesColumn.isVisible())
-            {
-                goToPath(currentPath.get(currentContentTabIndex));
-            }
 
-            activatedTreeTableView.getColumns().remove(currentSizeBytesColumn);
-        });
+        CustomTreeTableColumn<FileData, Short> isDirectoryColumn = new CustomTreeTableColumn<>("is Directory");
+        isDirectoryColumn.setMinWidth(preferredWidth * 0.1D);
+        isDirectoryColumn.setSortable(false);
+        isDirectoryColumn.setPrefWidth(preferredWidth * 0.15D);
+        isDirectoryColumn.setId("");
+        isDirectoryColumn.setVisible(false);
 
 
         nameColumn.setCellValueFactory((TreeTableColumn.CellDataFeatures<FileData, String> param) ->
@@ -566,6 +562,8 @@ public class FM_GUI extends Application
                 new ReadOnlyStringWrapper(param.getValue().getValue().getType()));
         sizeBytesColumn.setCellValueFactory((TreeTableColumn.CellDataFeatures<FileData, Long> param) ->
                 new ReadOnlyObjectWrapper<>(param.getValue().getValue().getSize()));
+        isDirectoryColumn.setCellValueFactory((TreeTableColumn.CellDataFeatures<FileData, Short> param) ->
+                new ReadOnlyObjectWrapper<>(param.getValue().getValue().isDirectory(true)));
 
         rootItem = new TreeItem<>(new FileData("root", 4096L));
 
@@ -677,13 +675,11 @@ public class FM_GUI extends Application
             currentOwnerColumn = findColumnByStringID(OWNER_COLUMN_ID);
             currentCreationTimeColumn = findColumnByStringID(CREATION_TIME_COLUMN_ID);
             currentLastModifiedTimeColumn = findColumnByStringID(LAST_MODIFIED_TIME_COLUMN_ID);
-
             //----------------
 
-            System.out.println("size: " + currentPath.size());
-            goToPath(currentPath.get(currentContentTabIndex));
+            configureSortPropertiesByMenuItems();
 
-            System.out.println("Запрос на фоку.");
+            goToPath(currentPath.get(currentContentTabIndex));
 
             Platform.runLater(() ->
             {
@@ -693,6 +689,7 @@ public class FM_GUI extends Application
 
         currentPath = new ArrayList<>();
         allContainersWithFiles_ArrayList = new ArrayList<>();
+        allIsDirectoryColumns_ArrayList = new ArrayList<>();
         allTreeTableViewWithFiles_ArrayList = new ArrayList<>();
         allTreeTableViewWithFiles_ArrayList.add(content_TreeTableView);
 
@@ -704,6 +701,7 @@ public class FM_GUI extends Application
         currentLastModifiedTimeColumn = lastModifiedTimeColumn;
         currentTypeColumn = typeColumn;
         currentSizeBytesColumn = sizeBytesColumn;
+        currentIsDirectoryColumn = isDirectoryColumn;
 
         fileStorages_FlowPane = new FlowPane(rem * 1.5D, rem * 0.7D);
         fileStorages_FlowPane.setPadding(new Insets(rem * 1.2D, rem * 0.5D, rem * 0.80D,
@@ -726,6 +724,7 @@ public class FM_GUI extends Application
         main_Tab.setContent(files_VBox);
 
         allContainersWithFiles_ArrayList.add(files_VBox);
+        allIsDirectoryColumns_ArrayList.add(currentIsDirectoryColumn);
 
         content_VBox = new VBox(rem * 0.45D);
         content_VBox.setPadding(new Insets(rem * 0.15D, rem * 0.7D, rem * 0.7D, rem * 0.7D));
@@ -1375,6 +1374,7 @@ public class FM_GUI extends Application
         }
 
         lastActiveSortColumn = targetColumn;
+        activatedTreeTableView.getSortOrder().clear();
 
         Iterator<TreeTableColumn<FileData, ?>> iterator = activatedTreeTableView.getColumns().iterator();
         while (iterator.hasNext())
@@ -1384,63 +1384,47 @@ public class FM_GUI extends Application
 
         if (targetColumn.equals(currentSizeBytesColumn))
         {
-            currentSizeBytesColumn.setVisible(true);
+            activatedTreeTableView.getColumns().add(currentSizeBytesColumn);
+            currentSizeBytesColumn.setSortable(true);
+            activatedTreeTableView.getSortOrder().add(currentSizeBytesColumn);
         }
+
 
         targetColumn.setSortable(true);
         targetColumn.setSortType(sortType);
-        activatedTreeTableView.getSortOrder().clear();
 
         if (directoriesFirst_MenuItem.isSelected())
         {
-            targetTypeColumn.setSortType(TreeTableColumn.SortType.DESCENDING);
-            activatedTreeTableView.getSortOrder().add(targetTypeColumn);
+            activatedTreeTableView.getColumns().add(currentIsDirectoryColumn);
+            currentIsDirectoryColumn.setSortable(true);
+            //Потому, что каталоги отображаются единичкой
+            currentIsDirectoryColumn.setSortType(TreeTableColumn.SortType.DESCENDING);
+            activatedTreeTableView.getSortOrder().add(currentIsDirectoryColumn);
         }
 
         activatedTreeTableView.getSortOrder().add(targetColumn);
         activatedTreeTableView.sort();
 
-        //================ Проверка на то, что каталоги действительно идут первыми
-        if (directoriesFirst_MenuItem.isSelected())
-        {
-            int temporaryLength = 3;
-            if (temporaryLength > activatedTreeTableView.getExpandedItemCount())
-            {
-                temporaryLength = activatedTreeTableView.getExpandedItemCount();
-            }
 
-            for (int k = 0; k < temporaryLength; k++)
-            {
-                if (activatedTreeTableView.getTreeItem(k).getValue().isDirectory())
-                {
-                    System.out.println("Директория");
-                }
-                else
-                {
-                    System.out.println("Скорее всего нужно поменять тип сортировки.");
-                    if (targetTypeColumn.getSortType() == TreeTableColumn.SortType.ASCENDING)
-                    {
-                        targetTypeColumn.setSortType(TreeTableColumn.SortType.DESCENDING);
-                    }
-                    else
-                    {
-                        targetTypeColumn.setSortType(TreeTableColumn.SortType.ASCENDING);
-                    }
-                }
-            }
-        }
-        //=============================================================
-
-        targetColumn.setSortable(false);
         iterator = activatedTreeTableView.getColumns().iterator();
         while (iterator.hasNext())
         {
             iterator.next().setSortable(false);
         }
 
-        if (currentSizeBytesColumn.isVisible())
+
+        if (targetColumn.equals(currentSizeBytesColumn))
         {
+            currentSizeBytesColumn.setSortable(false);
             currentSizeBytesColumn.setVisible(false);
+            activatedTreeTableView.getColumns().remove(currentSizeBytesColumn);
+        }
+
+        if (directoriesFirst_MenuItem.isSelected())
+        {
+            currentIsDirectoryColumn.setSortable(false);
+            currentIsDirectoryColumn.setVisible(false);
+            activatedTreeTableView.getColumns().remove(currentIsDirectoryColumn);
         }
     }
 
@@ -2561,21 +2545,15 @@ public class FM_GUI extends Application
         sizeBytesColumn.setMinWidth(preferredWidth * 0.1D);
         sizeBytesColumn.setSortable(false);
         sizeBytesColumn.setPrefWidth(preferredWidth * 0.15D);
-        sizeBytesColumn.setId(SIZE_COLUMN_ID);
+        sizeBytesColumn.setId(SIZE_BYTES_COLUMN_ID);
         sizeBytesColumn.setVisible(false);
-        sizeBytesColumn.visibleProperty().addListener(eventSizeBytesColumn ->
-        {
-            if (!activatedTreeTableView.getColumns().contains(currentSizeBytesColumn))
-            {
-                activatedTreeTableView.getColumns().add(currentSizeBytesColumn);
-            }
-            if (sizeBytesColumn.isVisible())
-            {
-                goToPath(currentPath.get(currentContentTabIndex));
-            }
 
-            activatedTreeTableView.getColumns().remove(currentSizeBytesColumn);
-        });
+        CustomTreeTableColumn<FileData, Short> isDirectoryColumn = new CustomTreeTableColumn<>("is Directory");
+        isDirectoryColumn.setMinWidth(preferredWidth * 0.1D);
+        isDirectoryColumn.setSortable(false);
+        isDirectoryColumn.setPrefWidth(preferredWidth * 0.15D);
+        isDirectoryColumn.setId("hren");
+        isDirectoryColumn.setVisible(false);
 
 
         newNameColumn.setCellValueFactory((TreeTableColumn.CellDataFeatures<FileData, String> param) ->
@@ -2592,6 +2570,8 @@ public class FM_GUI extends Application
                 new ReadOnlyStringWrapper(param.getValue().getValue().getType()));
         sizeBytesColumn.setCellValueFactory((TreeTableColumn.CellDataFeatures<FileData, Long> param) ->
                 new ReadOnlyObjectWrapper<>(param.getValue().getValue().getSize()));
+        isDirectoryColumn.setCellValueFactory((TreeTableColumn.CellDataFeatures<FileData, Short> param) ->
+                new ReadOnlyObjectWrapper<>(param.getValue().getValue().isDirectory(true)));
 
         newTreeTableView.getColumns().addAll(newNameColumn, newTypeColumn, newSizeColumn,
                 newOwnerColumn, newCreationTimeColumn, newLastModifiedTimeColumn);
@@ -2626,6 +2606,8 @@ public class FM_GUI extends Application
 
         allTreeTableViewWithFiles_ArrayList.add(newTreeTableView);
         allContainersWithFiles_ArrayList.add(files_VBox);
+        allIsDirectoryColumns_ArrayList.add(isDirectoryColumn);
+
 
         //Каждая открытая вкладка наследует путь от текущей
         if (currentPath.size() > currentContentTabIndex &&
@@ -2767,7 +2749,7 @@ public class FM_GUI extends Application
         }
 
 
-        if(fileStore_Popup.isShowing())
+        if (fileStore_Popup.isShowing())
         {
             fileStore_Popup.hide();
         }
@@ -2780,15 +2762,17 @@ public class FM_GUI extends Application
             fileStore_Popup.setX(fileSystemName_Label.localToScreen(
                     fileSystemName_Label.getBoundsInLocal()).getMinX());
             fileStore_Popup.setY(fileSystemName_Label.localToScreen(
-                    fileSystemName_Label.getBoundsInLocal()).getMinY()  +
-                    fileSystemName_Label.getBoundsInParent().getHeight() + labelHeight*0.2D);
+                    fileSystemName_Label.getBoundsInLocal()).getMinY() +
+                    fileSystemName_Label.getBoundsInParent().getHeight() + labelHeight * 0.2D);
         }
     }
 
 
-    /**Изменяет цвет рамки и текста текущей файловой системы на один из
+    /**
+     * Изменяет цвет рамки и текста текущей файловой системы на один из
      * заранее подготовленых цветов. Смена происходит в случае смены файловой
-     * системы.*/
+     * системы.
+     */
     private void changeFileSystemLabelTextAndColor()
     {
         try
@@ -2796,13 +2780,13 @@ public class FM_GUI extends Application
             String newFileSystemName = Files.getFileStore(currentPath.
                     get(currentContentTabIndex)).type();
 
-            if(!fileSystemName_Label.getText().equals(newFileSystemName))
+            if (!fileSystemName_Label.getText().equals(newFileSystemName))
             {
                 System.out.println("Нужно сменить цвет.");
                 int newColorIndex = new Random().nextInt(textColorForFileSystemName_Color.length);
                 fileSystemName_Label.setTextFill(textColorForFileSystemName_Color[newColorIndex]);
                 fileSystemName_Label.setBorder(new Border(new BorderStroke(
-                        borderColorForFileSystemName_Color[newColorIndex],BorderStrokeStyle.SOLID,
+                        borderColorForFileSystemName_Color[newColorIndex], BorderStrokeStyle.SOLID,
                         CornerRadii.EMPTY, fileSystemName_Label.getBorder().getStrokes()
                         .get(0).getWidths())));
 
@@ -2811,11 +2795,39 @@ public class FM_GUI extends Application
 
             fileSystemName_Label.setText(newFileSystemName);
         }
-        catch(IOException ioException)
+        catch (IOException ioException)
         {
             ioException.printStackTrace();
         }
 
+    }
+
+    /**
+     * Корректирует параметры сортировки исходя из выбранных параметров
+     * сортировки в меню.
+     */
+    private void configureSortPropertiesByMenuItems()
+    {
+        if (sortByName_MenuItem.isSelected())
+        {
+            lastActiveSortColumn = currentNameColumn;
+        }
+        if (sortByType_MenuItem.isSelected())
+        {
+            lastActiveSortColumn = currentTypeColumn;
+        }
+        if (sortByOwner_MenuItem.isSelected())
+        {
+            lastActiveSortColumn = currentOwnerColumn;
+        }
+        if (sortByCreationTime_MenuItem.isSelected())
+        {
+            lastActiveSortColumn = currentCreationTimeColumn;
+        }
+        if (sortByLastModifiedTime_MenuItem.isSelected())
+        {
+            lastActiveSortColumn = currentLastModifiedTimeColumn;
+        }
     }
 }
 
