@@ -28,6 +28,7 @@ public class FileData
     private boolean hasDirectory;
     private boolean hasFile;
     private boolean hasSymbolicLink;
+    private boolean hasWastedSymbolicLink;
     private Path symbolicLinkPath;
 
     public FileData(String aName, long aSize)
@@ -117,6 +118,11 @@ public class FileData
         this.hasSymbolicLink = symbolicLink;
     }
 
+    public void setWastedSymbolicLink(boolean value)
+    {
+        hasWastedSymbolicLink=value;
+    }
+
     public void setSymbolicLinkPath(final Path targetPath)
     {
         if (targetPath == null)
@@ -204,6 +210,10 @@ public class FileData
     {
         if (hasSymbolicLink)
         {
+            if(hasWastedSymbolicLink)
+            {
+                return "Wasted symbolic link";
+            }
             if (hasDirectory)
             {
                 return "Symbolic link at directory " + symbolicLinkPath.toAbsolutePath().toString();

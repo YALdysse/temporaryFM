@@ -42,6 +42,7 @@ import java.nio.file.*;
 import java.nio.file.attribute.*;
 import java.time.*;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.TemporalAdjusters;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -89,7 +90,7 @@ public class FM_GUI extends Application
 
     public static final double rem = new Text("").getBoundsInParent().getHeight();
     private double preferredWidth = rem * 27.0D;
-    private double preferredHeight = rem * 20.0D;
+    private double preferredHeight = rem * 22.0D;
     public final String FIlE_STORES_PATH = "file stores:///";
     //private Path currentPath;
     private ArrayList<Path> currentPath;
@@ -155,6 +156,7 @@ public class FM_GUI extends Application
     private Font cellFont;
     private Image folderIcon_Image;
     private Image fileIcon_Image;
+    private Image brokenLink_Image;
 
     private FlowPane fileStorages_FlowPane;
     //private VBox currentContainerWithFiles_VBox;
@@ -180,7 +182,6 @@ public class FM_GUI extends Application
         //root.setPadding(new Insets(rem * 0.55D));
 
         scene = new Scene(root);
-
         initializeComponents();
 
         stage.setScene(scene);
@@ -438,7 +439,7 @@ public class FM_GUI extends Application
 
     private void initializeGeneral()
     {
-        fileIconHeight = 20.0D;
+        fileIconHeight = 22.0D;
 
         CustomTreeTableColumn<FileData, String> nameColumn = new CustomTreeTableColumn<>("Name");
         nameColumn.setMinWidth(preferredWidth * 0.1D);
@@ -567,7 +568,7 @@ public class FM_GUI extends Application
 
         TreeTableView<FileData> content_TreeTableView = new TreeTableView<>();
 
-        /*Сделяно, чтобы F2 захватывалась в таблице файлов. Потенциально опасно -
+        /*Сделано, чтобы F2 захватывалась в таблице файлов. Потенциально опасно -
          * иногда приводит к ошибкам JRE!!!*/
 //        content_TreeTableView.addEventHandler(KeyEvent.KEY_RELEASED, new EventHandler<KeyEvent>()
 //        {
@@ -1082,6 +1083,7 @@ public class FM_GUI extends Application
 
         folderIcon_Image = new Image(FM_GUI.class.getResourceAsStream("/Images/folder.png"));
         fileIcon_Image = new Image(FM_GUI.class.getResourceAsStream("/Images/file.png"));
+        brokenLink_Image = new Image(FM_GUI.class.getResourceAsStream("/Images/brokenLink_2.png"));
 
 
         System.out.println("На загрузку ресурсов потрачено: " + (System.currentTimeMillis() - startTime));
@@ -1107,7 +1109,7 @@ public class FM_GUI extends Application
     /**
      * Позволяет перейти к определенному пути. Обновляет содержимое таблицы файлов.
      */
-    public boolean goToPath(final Path destinationPath)
+    public boolean goToPath(Path destinationPath)
     {
         if (destinationPath == null)
         {
@@ -1123,6 +1125,18 @@ public class FM_GUI extends Application
         {
             System.out.println("Переход отменен. Это файл!");
             return false;
+        }
+        if(Files.isSymbolicLink(destinationPath))
+        {
+            System.out.println("Символическая ссылка.");
+            try
+            {
+               destinationPath = Files.readSymbolicLink(destinationPath).toAbsolutePath();
+            }
+            catch(IOException ioException)
+            {
+                ioException.printStackTrace();
+            }
         }
 
         if (!activatedTreeTableView.isTableMenuButtonVisible())
@@ -1222,25 +1236,26 @@ public class FM_GUI extends Application
                     }
 
                     TreeItem<FileData> temporaryTreeItem = new TreeItem<>(temporaryFileData);
-                    if (temporaryFileData.isDirectory())
-                    {
-                        applyIconForTreeItem(temporaryTreeItem, folderIcon_Image, fileIconHeight);
-                    }
-                    if (temporaryFileData.isFile())
-                    {
-                        applyIconForTreeItem(temporaryTreeItem, fileIcon_Image, fileIconHeight);
-                    }
-                    //if(temporaryFileData.isSymbolicLink())
-                    //{
-                        //applyIconForTreeItem(temporaryTreeItem, fileIcon_Image, fileIconHeight);
-                    //}
+                    determineIconToTreeItem(temporaryFileData,temporaryTreeItem);
 
+                    currentRootItem.getChildren().add(temporaryTreeItem);
+                }
+                catch(NoSuchFileException noSuchFileException)
+                {
+                    System.out.println("Скорее всего битая символическая ссылка " + temporaryPath.
+                            getFileName().toString());
+                    temporaryFileData = new FileData(temporaryPath.getFileName().toString(),-1);
+                    temporaryFileData.setSymbolicLink(true);
+                    temporaryFileData.setWastedSymbolicLink(true);
+                    TreeItem<FileData> temporaryTreeItem  = new TreeItem<>(temporaryFileData);
+                    applyIconForTreeItem(temporaryTreeItem,brokenLink_Image,fileIconHeight);
                     currentRootItem.getChildren().add(temporaryTreeItem);
                 }
                 catch (IOException ioException)
                 {
                     ioException.printStackTrace();
                 }
+
             }
 
         }
@@ -2836,6 +2851,24 @@ public class FM_GUI extends Application
         {
             lastActiveSortColumn = currentLastModifiedTimeColumn;
         }
+    }
+
+
+    /**Определяет какую иконку нужно использовать для элемента таблицы и устанавливает её.*/
+    private void determineIconToTreeItem(FileData fileData,final TreeItem<FileData> targetItem)
+    {
+        if (fileData.isDirectory())
+        {
+            applyIconForTreeItem(targetItem, folderIcon_Image, fileIconHeight);
+        }
+        if (fileData.isFile())
+        {
+            applyIconForTreeItem(targetItem, fileIcon_Image, fileIconHeight);
+        }
+        //if(temporaryFileData.isSymbolicLink())
+        //{
+        //applyIconForTreeItem(temporaryTreeItem, fileIcon_Image, fileIconHeight);
+        //}
     }
 }
 
