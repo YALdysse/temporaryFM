@@ -175,6 +175,9 @@ public class FM_GUI extends Application
     private Color[] textColorForFileSystemName_Color;
     private Color[] borderColorForFileSystemName_Color;
 
+    private Popup quickSearchInCurrentFolder_Popup;
+    private TextField quickSearchKey_TextField;
+
     @Override
     public void start(Stage primaryStage) throws Exception
     {
@@ -1354,6 +1357,11 @@ public class FM_GUI extends Application
             {
                 goToPath(Paths.get(activatedTreeTableView.getSelectionModel().getSelectedItem().getValue().getName()));
             }
+
+            if (quickSearchInCurrentFolder_Popup.isShowing())
+            {
+                quickSearchInCurrentFolder_Popup.hide();
+            }
         }
         else if (keyRelease_KeyCode == KeyCode.F2)
         {
@@ -1375,6 +1383,29 @@ public class FM_GUI extends Application
             {
                 currentPath_TextField.requestFocus();
             });
+        }
+        else if (keyRelease_KeyCode.getCode() >= 48 &&
+                keyRelease_KeyCode.getCode() <= 90 && !event.isControlDown())
+        {
+            System.out.println("Text: '" + event.getText() + "'");
+
+            if (quickSearchInCurrentFolder_Popup == null)
+            {
+                initializeQuickSearchInCurrentDirectory();
+            }
+
+
+            if (!quickSearchInCurrentFolder_Popup.isShowing())
+            {
+                System.out.println("отображаем");
+                quickSearchKey_TextField.setText(event.getText());
+                quickSearchInCurrentFolder_Popup.show(stage, stage.getX(), stage.getY() + stage.getHeight()
+                        + stage.getHeight() * 0.01D);
+
+            }
+
+            quickSearchKey_TextField.deselect();
+            quickSearchKey_TextField.end();
         }
     }
 
@@ -2981,6 +3012,62 @@ public class FM_GUI extends Application
                     "файл в таблицу не нужно.");
         }
     }
+
+    private void initializeQuickSearchInCurrentDirectory()
+    {
+        quickSearchInCurrentFolder_Popup = new Popup();
+        quickSearchInCurrentFolder_Popup.setAutoHide(true);
+
+        quickSearchKey_TextField = new TextField();
+        quickSearchKey_TextField.textProperty().addListener((event, oldText, newText) ->
+        {
+            quickSearchKey_TextField.deselect();
+            quickSearchKey_TextField.end();
+            quickSearchInCurrentFolder();
+        });
+
+        VBox quickSearchContent_VBox = new VBox();
+        quickSearchContent_VBox.setPadding(new Insets(rem * 0.45D));
+        quickSearchContent_VBox.getChildren().add(quickSearchKey_TextField);
+
+
+        quickSearchInCurrentFolder_Popup.getContent().add(quickSearchContent_VBox);
+    }
+
+    /**
+     * Производит поиск совпадений в названиях файлов в текущем каталоге и выделяет
+     * тот, что больше подходит. Поиск не чувствителен к регистру.
+     */
+    private void quickSearchInCurrentFolder()
+    {
+        ObservableList<TreeItem<FileData>> elements = activatedTreeTableView.getRoot().getChildren();
+        TreeTableView.TreeTableViewSelectionModel<FileData> selectionModel = activatedTreeTableView.getSelectionModel();
+
+        for (int k = 0; k < elements.size(); k++)
+        {
+            if (elements.get(k).getValue().getName().toLowerCase().contains(quickSearchKey_TextField.getText()))
+            {
+                selectionModel.clearSelection();
+                selectionModel.select(k);
+
+                if (k > 2)
+                {
+                    activatedTreeTableView.scrollTo(k - 2);
+                }
+                else
+                {
+                    activatedTreeTableView.scrollTo(k);
+                }
+//                System.out.println("Совпадение найдено: " + activatedTreeTableView.getSelectionModel()
+//                        .getSelectedItem().getValue().getName());
+                return;
+            }
+        }
+        selectionModel.clearSelection();
+        selectionModel.select(0);
+        activatedTreeTableView.scrollTo(0);
+    }
+
 
 }
 
