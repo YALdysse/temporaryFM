@@ -29,7 +29,7 @@ public class FileData
     private boolean hasFile;
     private boolean hasSymbolicLink;
     private boolean hasWastedSymbolicLink;
-    private Path symbolicLinkPath;
+    private Path symbolicLinkTargetPath;
 
     public FileData(String aName, long aSize)
     {
@@ -129,7 +129,7 @@ public class FileData
         {
             return;
         }
-        symbolicLinkPath = targetPath;
+        symbolicLinkTargetPath = targetPath;
     }
 
     public String getName()
@@ -216,11 +216,11 @@ public class FileData
             }
             if (hasDirectory)
             {
-                return "Symbolic link at directory " + symbolicLinkPath.toAbsolutePath().toString();
+                return "Symbolic link at directory " + symbolicLinkTargetPath.toAbsolutePath().toString();
             }
             else if (hasFile)
             {
-                return "Symbolic link at file " + symbolicLinkPath.toAbsolutePath().toString();
+                return "Symbolic link at file " + symbolicLinkTargetPath.toAbsolutePath().toString();
             }
         }
         else if (hasDirectory)

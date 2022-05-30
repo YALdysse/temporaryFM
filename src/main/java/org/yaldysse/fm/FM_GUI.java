@@ -132,6 +132,7 @@ public class FM_GUI extends Application
     private MenuItem copyAbsoluteNamePath_MenuItem;
     private MenuItem createFile_MenuItem;
     private MenuItem createDirectory_MenuItem;
+    private MenuItem createSymbolicLink_MenuItem;
     private MenuItem copy_MenuItem;
     private MenuItem paste_MenuItem;
     private MenuItem move_MenuItem;
@@ -413,6 +414,10 @@ public class FM_GUI extends Application
         createDirectory_MenuItem.setAccelerator(new KeyCodeCombination(KeyCode.N, KeyCombination.CONTROL_DOWN));
         createDirectory_MenuItem.setOnAction(this::createDirectory_MenuItem_Action);
 
+        createSymbolicLink_MenuItem = new MenuItem("Create symbolic link");
+        createSymbolicLink_MenuItem.setAccelerator(new KeyCodeCombination(KeyCode.L, KeyCombination.CONTROL_DOWN));
+        createSymbolicLink_MenuItem.setOnAction(this::createSymbolicLink_MenuItem_Action);
+
         copy_MenuItem = new MenuItem("Copy");
         copy_MenuItem.setAccelerator(new KeyCodeCombination(KeyCode.C, KeyCombination.CONTROL_DOWN));
         copy_MenuItem.setOnAction(event ->
@@ -438,7 +443,7 @@ public class FM_GUI extends Application
         showOrEditAttributes_MenuItem.setOnAction(this::showOrEditAttributes_Action);
 
         edit_Menu.getItems().addAll(showOrEditAttributes_MenuItem, new SeparatorMenuItem(),
-                createFile_MenuItem, createDirectory_MenuItem,
+                createFile_MenuItem, createDirectory_MenuItem, createSymbolicLink_MenuItem,
                 new SeparatorMenuItem(), copy_MenuItem, move_MenuItem, paste_MenuItem,
                 new SeparatorMenuItem(), rename_MenuItem, delete_MenuItem);
 
@@ -1059,6 +1064,9 @@ public class FM_GUI extends Application
         MenuItem createDirectory_contextMenuForFilesItem = new MenuItem("Create Directory");
         createDirectory_contextMenuForFilesItem.setOnAction(this::createDirectory_MenuItem_Action);
 
+        MenuItem createSymbolicLink_contextMenuForFilesItem = new MenuItem("Create Symbolic link");
+        createSymbolicLink_contextMenuForFilesItem.setOnAction(this::createSymbolicLink_MenuItem_Action);
+
         MenuItem copyFileToClipboard_contextMenuForFilesItem = new MenuItem("Copy");
         copyFileToClipboard_contextMenuForFilesItem.setOnAction(this::copyFilesToClipboard_MenuItem_Action);
 
@@ -1079,7 +1087,8 @@ public class FM_GUI extends Application
         deleteFile_contextMenuForFilesItem.setOnAction(this::delete_MenuItem_Action);
 
         contextMenuForFiles.getItems().addAll(createFile_contextMenuForFilesItem,
-                createDirectory_contextMenuForFilesItem, new SeparatorMenuItem(), copyFileToClipboard_contextMenuForFilesItem,
+                createDirectory_contextMenuForFilesItem, createSymbolicLink_contextMenuForFilesItem,
+                new SeparatorMenuItem(), copyFileToClipboard_contextMenuForFilesItem,
                 moveFilesToClipboard_contextMenuForFilesItem, pasteFileFromClipboard_contextMenuForFilesItem,
                 renameFile_contextMenuForFilesItem,
                 deleteFile_contextMenuForFilesItem);
@@ -2341,11 +2350,23 @@ public class FM_GUI extends Application
 
         try
         {
-            BasicFileAttributes basicFileAttributes = Files.readAttributes(targetPath, BasicFileAttributes.class);
+            PosixFileAttributes basicFileAttributes = Files.readAttributes(targetPath, PosixFileAttributes.class,
+                    LinkOption.NOFOLLOW_LINKS);
             newFileData.setSize(basicFileAttributes.size());
             newFileData.setFile(basicFileAttributes.isRegularFile());
             newFileData.setSymbolicLink(basicFileAttributes.isSymbolicLink());
             newFileData.setDirectory(basicFileAttributes.isDirectory());
+
+            //Определяем ссылка ли это на каталог или файл
+            if (newFileData.isSymbolicLink())
+            {
+                Path symbolicLinkTargetPath = Files.readSymbolicLink(targetPath);
+                PosixFileAttributes temporaryAttributes = Files.readAttributes(symbolicLinkTargetPath,
+                        PosixFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
+                newFileData.setFile(temporaryAttributes.isRegularFile());
+                newFileData.setDirectory(temporaryAttributes.isDirectory());
+                newFileData.setSymbolicLinkPath(symbolicLinkTargetPath);
+            }
 
             if (currentCreationTimeColumn.isVisible())
             {
@@ -2361,14 +2382,7 @@ public class FM_GUI extends Application
             }
 
             TreeItem<FileData> temporaryTreeItem = new TreeItem<>(newFileData);
-            if (newFileData.isDirectory())
-            {
-                applyIconForTreeItem(temporaryTreeItem, folderIcon_Image, fileIconHeight);
-            }
-            else if (newFileData.isFile())
-            {
-                applyIconForTreeItem(temporaryTreeItem, fileIcon_Image, fileIconHeight);
-            }
+            determineIconToTreeItem(newFileData, temporaryTreeItem);
 
             activatedTreeTableView.getRoot().getChildren().add(temporaryTreeItem);
         }
@@ -2870,6 +2884,10 @@ public class FM_GUI extends Application
      */
     private void determineIconToTreeItem(FileData fileData, final TreeItem<FileData> targetItem)
     {
+        if (fileData.isSymbolicLink())
+        {
+            //applyIconForTreeItem(targetItem, folderIcon_Image, fileIconHeight);
+        }
         if (fileData.isDirectory())
         {
             applyIconForTreeItem(targetItem, folderIcon_Image, fileIconHeight);
@@ -2934,5 +2952,35 @@ public class FM_GUI extends Application
             Application.launch();
         }
     }
+
+
+    private CreateSymbolicLinkDialog createSymbolicLinkDialog;
+
+    private void createSymbolicLink_MenuItem_Action(ActionEvent event)
+    {
+        Path temporaryTargetLinkPath = currentPath.get(currentContentTabIndex).resolve(
+                activatedTreeTableView.getSelectionModel().getSelectedItem().getValue().getName());
+
+        if (createSymbolicLinkDialog == null)
+        {
+            createSymbolicLinkDialog = new CreateSymbolicLinkDialog(
+                    temporaryTargetLinkPath, null);
+        }
+        Path resultPath = createSymbolicLinkDialog.showAndWait(temporaryTargetLinkPath,
+                null);
+
+        if (resultPath != null && resultPath.getParent().equals(currentPath
+                .get(currentContentTabIndex)))
+        {
+            //Переписать метод%%%%
+            addRowToTreeTable(resultPath);
+        }
+        else
+        {
+            System.out.println("Символическая ссылка создана в другом месте. Добавлять " +
+                    "файл в таблицу не нужно.");
+        }
+    }
+
 }
 
