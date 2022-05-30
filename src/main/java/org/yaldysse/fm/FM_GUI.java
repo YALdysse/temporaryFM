@@ -14,6 +14,7 @@ import javafx.geometry.HPos;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
+import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.control.skin.TableColumnHeader;
@@ -211,8 +212,18 @@ public class FM_GUI extends Application
         activatedTreeTableView.requestFocus();
 
         //goToDriveList();
-        goToFileStoragesPane();
-        content_TabPane.getSelectionModel().getSelectedItem().setText(FIlE_STORES_PATH);
+        //-----------------
+        List<String> rawParametersList = getParameters().getRaw();
+        if (rawParametersList.size() > 1)
+        {
+            processArguments(rawParametersList);
+        }
+        else
+        {
+            goToFileStoragesPane();
+            content_TabPane.getSelectionModel().getSelectedItem().setText(FIlE_STORES_PATH);
+        }
+
     }
 
     private void initializeMenu()
@@ -1126,14 +1137,14 @@ public class FM_GUI extends Application
             System.out.println("Переход отменен. Это файл!");
             return false;
         }
-        if(Files.isSymbolicLink(destinationPath))
+        if (Files.isSymbolicLink(destinationPath))
         {
             System.out.println("Символическая ссылка.");
             try
             {
-               destinationPath = Files.readSymbolicLink(destinationPath).toAbsolutePath();
+                destinationPath = Files.readSymbolicLink(destinationPath).toAbsolutePath();
             }
-            catch(IOException ioException)
+            catch (IOException ioException)
             {
                 ioException.printStackTrace();
             }
@@ -1228,7 +1239,7 @@ public class FM_GUI extends Application
                     temporaryFileData.setFile(Files.isRegularFile(temporaryPath));
                     temporaryFileData.setSymbolicLink(Files.isSymbolicLink(temporaryPath));
 
-                    if(temporaryFileData.isSymbolicLink())
+                    if (temporaryFileData.isSymbolicLink())
                     {
                         Path temporaryCurrentPath = currentPath.get(currentContentTabIndex);
                         Path symbolicLinkPath = Files.readSymbolicLink(temporaryCurrentPath.resolve(temporaryPath.getFileName()));
@@ -1236,19 +1247,19 @@ public class FM_GUI extends Application
                     }
 
                     TreeItem<FileData> temporaryTreeItem = new TreeItem<>(temporaryFileData);
-                    determineIconToTreeItem(temporaryFileData,temporaryTreeItem);
+                    determineIconToTreeItem(temporaryFileData, temporaryTreeItem);
 
                     currentRootItem.getChildren().add(temporaryTreeItem);
                 }
-                catch(NoSuchFileException noSuchFileException)
+                catch (NoSuchFileException noSuchFileException)
                 {
                     System.out.println("Скорее всего битая символическая ссылка " + temporaryPath.
                             getFileName().toString());
-                    temporaryFileData = new FileData(temporaryPath.getFileName().toString(),-1);
+                    temporaryFileData = new FileData(temporaryPath.getFileName().toString(), -1);
                     temporaryFileData.setSymbolicLink(true);
                     temporaryFileData.setWastedSymbolicLink(true);
-                    TreeItem<FileData> temporaryTreeItem  = new TreeItem<>(temporaryFileData);
-                    applyIconForTreeItem(temporaryTreeItem,brokenLink_Image,fileIconHeight);
+                    TreeItem<FileData> temporaryTreeItem = new TreeItem<>(temporaryFileData);
+                    applyIconForTreeItem(temporaryTreeItem, brokenLink_Image, fileIconHeight);
                     currentRootItem.getChildren().add(temporaryTreeItem);
                 }
                 catch (IOException ioException)
@@ -2854,8 +2865,10 @@ public class FM_GUI extends Application
     }
 
 
-    /**Определяет какую иконку нужно использовать для элемента таблицы и устанавливает её.*/
-    private void determineIconToTreeItem(FileData fileData,final TreeItem<FileData> targetItem)
+    /**
+     * Определяет какую иконку нужно использовать для элемента таблицы и устанавливает её.
+     */
+    private void determineIconToTreeItem(FileData fileData, final TreeItem<FileData> targetItem)
     {
         if (fileData.isDirectory())
         {
@@ -2869,6 +2882,57 @@ public class FM_GUI extends Application
         //{
         //applyIconForTreeItem(temporaryTreeItem, fileIcon_Image, fileIconHeight);
         //}
+    }
+
+    private void processArguments(List<String> rawParametersList)
+    {
+        if (rawParametersList.get(0).equals("--path"))
+        {
+            goToPath(Paths.get(rawParametersList.get(1)));
+        }
+    }
+
+    public static void main(String[] args)
+    {
+        for (int k = 0; k < args.length; k++)
+        {
+            System.out.println("args[" + k + "]: " + args[k]);
+        }
+        if (args != null && args.length > 0 && args[0] != null)
+        {
+            System.out.println(args[0]);
+            Path temporaryPath = Paths.get(args[0]);
+
+            try
+            {
+                if (Files.exists(temporaryPath))
+                {
+                    System.out.println("Файл существует. Запускаем программу.");
+                    Application.launch("--path", temporaryPath.toAbsolutePath().toString());
+                }
+                else if (Files.exists(temporaryPath.getParent()))
+                {
+                    System.out.println("Parent: " + temporaryPath.getParent().toAbsolutePath().toString());
+                    Application.launch("--path", temporaryPath.getParent().toAbsolutePath().toString());
+                }
+                else
+                {
+                    System.out.println("Распознать путь по аргументу не удалось.");
+                    Application.launch();
+                }
+            }
+            catch (NullPointerException nullPointerException)
+            {
+                System.out.println("Скорее всего такого пути не существует.");
+                Application.launch();
+            }
+
+        }
+        else
+        {
+            System.out.println("Запускаем без параметров.");
+            Application.launch();
+        }
     }
 }
 
