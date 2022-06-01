@@ -1,6 +1,5 @@
-package org.yaldysse.fm;
+package org.yaldysse.fm.dialogs;
 
-import com.sun.javafx.collections.ImmutableObservableList;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -17,6 +16,7 @@ import javafx.scene.text.FontWeight;
 import javafx.scene.text.Text;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
+import org.yaldysse.fm.ConfirmOperationButton;
 
 public class ConfirmOperationDialog extends Stage
 {
@@ -272,8 +272,3 @@ public class ConfirmOperationDialog extends Stage
 
 }
 
-
-enum ConfirmDialogButtonType
-{
-    CANCEL, OK, REPLACE_FILE, SKIP, UNITE, UNITE_ALL;
-}

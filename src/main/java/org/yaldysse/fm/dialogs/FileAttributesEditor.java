@@ -1,4 +1,4 @@
-package org.yaldysse.fm;
+package org.yaldysse.fm.dialogs;
 
 import javafx.event.ActionEvent;
 import javafx.geometry.Insets;
@@ -17,6 +17,10 @@ import javafx.scene.text.FontWeight;
 import javafx.scene.text.Text;
 import javafx.stage.Popup;
 import javafx.stage.Stage;
+import org.yaldysse.fm.FM_GUI;
+import org.yaldysse.fm.dialogs.FilesNumberAndSizeCalculator;
+import org.yaldysse.fm.dialogs.SimpleFileSizeAndNumberCounter;
+
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
@@ -29,7 +33,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 
-public class FileAttributesEditor
+public class FileAttributesEditor implements FilesNumberAndSizeCalculator
 {
     private Path targetFile_Path;
 
@@ -78,12 +82,14 @@ public class FileAttributesEditor
     private Label ownerAttribute_Label;
     private Label groupAttribute_Label;
     private Label sizeBytesAttribute_Label;
+    private Label filesNumberInside_Label;
     private Label creationTimeAttribute_Label;
     private Label lastModifiedTimeAttribute_Label;
 
     private Label ownerAttributeValue_Label;
     private Label groupAttributeValue_Label;
     private Label sizeBytesAttributeValue_Label;
+    private Label filesNumberInsideValue_Label;
     private Label creationTimeAttributeValue_Label;
     private Label lastModifiedTimeAttributeValue_Label;
 
@@ -121,10 +127,14 @@ public class FileAttributesEditor
 
     private Label deleteExtendedAttribute_Label;
 
+    private ProgressIndicator sizeProgressIndicator;
+    private ProgressIndicator filesNumber_ProgressIndicator;
+
     public FileAttributesEditor(final Path file)
     {
         targetFile_Path = file;
         initializeComponents();
+        createAndStartFileSizeAndNumberCounterThread();
     }
 
 
@@ -216,6 +226,7 @@ public class FileAttributesEditor
         ownerAttribute_Label = new Label("Owner:");
         groupAttribute_Label = new Label("Group:");
         sizeBytesAttribute_Label = new Label("Size (bytes):");
+        filesNumberInside_Label = new Label("Files:");
         creationTimeAttribute_Label = new Label("Creation time:");
         lastModifiedTimeAttribute_Label = new Label("Last Modified time:");
 
@@ -224,15 +235,21 @@ public class FileAttributesEditor
         ownerAttributeValue_Label = new Label();
         groupAttributeValue_Label = new Label();
         sizeBytesAttributeValue_Label = new Label();
+        filesNumberInsideValue_Label = new Label();
         creationTimeAttributeValue_Label = new Label();
         lastModifiedTimeAttributeValue_Label = new Label();
+
+        filesNumber_ProgressIndicator = new ProgressIndicator();
+        sizeProgressIndicator = new ProgressIndicator();
 
         attributes_GridPane.addRow(attributes_GridPane.getRowCount(), ownerAttribute_Label,
                 ownerAttributeValue_Label);
         attributes_GridPane.addRow(attributes_GridPane.getRowCount(), groupAttribute_Label,
                 groupAttributeValue_Label);
         attributes_GridPane.addRow(attributes_GridPane.getRowCount(), sizeBytesAttribute_Label,
-                sizeBytesAttributeValue_Label);
+                sizeBytesAttributeValue_Label, sizeProgressIndicator);
+        attributes_GridPane.addRow(attributes_GridPane.getRowCount(), filesNumberInside_Label,
+                filesNumberInsideValue_Label, filesNumber_ProgressIndicator);
         attributes_GridPane.addRow(attributes_GridPane.getRowCount(), creationTimeAttribute_Label,
                 creationTimeAttributeValue_Label);
         attributes_GridPane.addRow(attributes_GridPane.getRowCount(), lastModifiedTimeAttribute_Label,
@@ -1224,7 +1241,7 @@ public class FileAttributesEditor
         extendedAttributeValue_TextField.setText("");
         extendedAttributeValue_TextField.textProperty().addListener((event, value1, value2) ->
         {
-            if(value2.length() > 255)
+            if (value2.length() > 255)
             {
                 extendedAttributeValue_TextField.setText(value1);
             }
@@ -1680,14 +1697,16 @@ public class FileAttributesEditor
 
             ownerAttributeValue_Label.setText(posixFileAttributes.owner().getName());
             groupAttributeValue_Label.setText(String.valueOf(posixFileAttributes.group().getName()));
-            sizeBytesAttributeValue_Label.setText(NumberFormat.getNumberInstance().format(posixFileAttributes.size()));
+            //sizeBytesAttributeValue_Label.setText(NumberFormat.getNumberInstance().format(posixFileAttributes.size()));
             creationTimeAttributeValue_Label.setText(LocalDateTime.ofInstant(basicFileAttributes.creationTime().toInstant(), ZoneId.systemDefault()).format(formatter));
             lastModifiedTimeAttributeValue_Label.setText(LocalDateTime.ofInstant(basicFileAttributes.lastModifiedTime().toInstant(), ZoneId.systemDefault()).format(formatter));
+            createAndStartFileSizeAndNumberCounterThread();
 
             attributes_GridPane.getChildren().clear();
             attributes_GridPane.addRow(attributes_GridPane.getRowCount(), ownerAttribute_Label, ownerAttributeValue_Label);
             attributes_GridPane.addRow(attributes_GridPane.getRowCount(), groupAttribute_Label, groupAttributeValue_Label);
             attributes_GridPane.addRow(attributes_GridPane.getRowCount(), sizeBytesAttribute_Label, sizeBytesAttributeValue_Label);
+            attributes_GridPane.addRow(attributes_GridPane.getRowCount(), filesNumberInside_Label, filesNumberInsideValue_Label);
             attributes_GridPane.addRow(attributes_GridPane.getRowCount(), creationTimeAttribute_Label, creationTimeAttributeValue_Label);
             attributes_GridPane.addRow(attributes_GridPane.getRowCount(), lastModifiedTimeAttribute_Label, lastModifiedTimeAttributeValue_Label);
             attributes_GridPane.add(firstSeparator, 0, attributes_GridPane.getRowCount(), 2, 1);
@@ -1847,4 +1866,20 @@ public class FileAttributesEditor
 
     }
 
+    private void createAndStartFileSizeAndNumberCounterThread()
+    {
+        Thread fileSizeAndNumberCounterThread = new Thread(new SimpleFileSizeAndNumberCounter(targetFile_Path,
+                this), "File Size and Number Counter Thread for File Attribute Editor");
+        fileSizeAndNumberCounterThread.start();
+    }
+
+/**Предназначен для вызова из потока подсчета файлов и размера {@link org.yaldysse.fm.dialogs.SimpleFileSizeAndNumberCounter}*/
+    @Override
+    public void appearInNodes(int aFilesNumber, long aTotalSize)
+    {
+        sizeBytesAttributeValue_Label.setText("" + NumberFormat.getNumberInstance().format(aTotalSize));
+        filesNumberInsideValue_Label.setText("" + aFilesNumber);
+        attributes_GridPane.getChildren().remove(sizeProgressIndicator);
+        attributes_GridPane.getChildren().remove(filesNumber_ProgressIndicator);
+    }
 }

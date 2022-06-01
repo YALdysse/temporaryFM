@@ -1,5 +1,6 @@
-package org.yaldysse.fm;
+package org.yaldysse.fm.dialogs;
 
+import javafx.application.Platform;
 import javafx.collections.ObservableList;
 import javafx.event.ActionEvent;
 import javafx.geometry.Insets;
@@ -17,8 +18,8 @@ import javafx.scene.text.Text;
 import javafx.stage.FileChooser;
 import javafx.stage.Modality;
 import javafx.stage.StageStyle;
-
-import javax.crypto.AEADBadTagException;
+import org.yaldysse.fm.dialogs.ConfirmDialogButtonType;
+import org.yaldysse.fm.ConfirmOperationButton;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.FileAlreadyExistsException;
@@ -28,7 +29,7 @@ import java.nio.file.Paths;
 
 /**
  * Описывает компонент программы, отвечающий за создание символической ссылки.
- * Построен с использованием класса {@link org.yaldysse.fm.ConfirmOperationDialog}, который описывает интерфейс GUI для некоторых
+ * Построен с использованием класса {@link ConfirmOperationDialog}, который описывает интерфейс GUI для некоторых
  * операций с файлами.
  *
  * @see ConfirmOperationDialog
@@ -78,6 +79,11 @@ public class CreateSymbolicLinkDialog
         if (targetLinkPath != null)
         {
             targetPath_TextField.setText(targetLinkPath.toAbsolutePath().toString());
+
+//            Platform.runLater(() ->
+//            {
+//                    targetPath_TextField.positionCaret(targetPath_TextField.getText().length()-1);
+//            });
         }
 
 
@@ -121,6 +127,7 @@ public class CreateSymbolicLinkDialog
             {
                 finalOk_Button[0].setDisable(false);
             }
+            targetPath_TextField.end();
         });
 
 

@@ -20,6 +20,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
+/**Описывает всплывающее окно, в котором отображена информация об хранилище данных
+ * (раздел, диск и т.д.).*/
 public class FileStoreInfoPopup extends Popup
 {
     private Path path;

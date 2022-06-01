@@ -4,17 +4,14 @@ import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
 import javafx.application.Application;
 import javafx.application.Platform;
-import javafx.beans.property.ReadOnlyLongWrapper;
 import javafx.beans.property.ReadOnlyObjectWrapper;
 import javafx.beans.property.ReadOnlyStringWrapper;
 import javafx.collections.ObservableList;
 import javafx.event.ActionEvent;
 import javafx.event.EventHandler;
-import javafx.geometry.HPos;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
-import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.control.skin.TableColumnHeader;
@@ -29,21 +26,20 @@ import javafx.scene.text.Text;
 import javafx.stage.*;
 import javafx.util.Callback;
 import javafx.util.Duration;
-import org.apache.commons.io.FileSystemUtils;
+import org.yaldysse.fm.dialogs.ConfirmDialogButtonType;
+import org.yaldysse.fm.dialogs.ConfirmOperationDialog;
+import org.yaldysse.fm.dialogs.CreateSymbolicLinkDialog;
+import org.yaldysse.fm.dialogs.FileAttributesEditor;
+import org.yaldysse.fm.dialogs.delete.DeleteFileDialog;
+import org.yaldysse.fm.dialogs.delete.DeleteOperationResult;
 import org.yaldysse.tools.Shell;
-import org.yaldysse.tools.StorageCapacity;
 
-import javax.swing.filechooser.FileSystemView;
 import java.io.File;
 import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.nio.charset.Charset;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.nio.file.attribute.*;
 import java.time.*;
 import java.time.format.DateTimeFormatter;
-import java.time.temporal.TemporalAdjusters;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -142,6 +138,7 @@ public class FM_GUI extends Application
     private MenuItem goToNextTab_MenuItem;
     private MenuItem showOrEditAttributes_MenuItem;
     private MenuItem openTerminalHere_MenuItem;
+    private MenuItem openInNewTab_MenuItem;
 
     private CheckMenuItem autoSizeColumn_MenuItem;
 
@@ -177,6 +174,10 @@ public class FM_GUI extends Application
 
     private Popup quickSearchInCurrentFolder_Popup;
     private TextField quickSearchKey_TextField;
+    private DeleteFileDialog deleteFileDialog;
+    private FileAttributesEditor fileAttributesEditor;
+    private CreateSymbolicLinkDialog createSymbolicLinkDialog;
+
 
     @Override
     public void start(Stage primaryStage) throws Exception
@@ -263,8 +264,14 @@ public class FM_GUI extends Application
         openTerminalHere_MenuItem.setAccelerator(new KeyCodeCombination(KeyCode.E, KeyCombination.CONTROL_DOWN));
         openTerminalHere_MenuItem.setOnAction(this::addActionToOpenTerminalMenuItem);
 
+        openInNewTab_MenuItem = new MenuItem("Open in new tab");
+        openInNewTab_MenuItem.setAccelerator(new KeyCodeCombination(KeyCode.T, KeyCombination.CONTROL_DOWN, KeyCombination.SHIFT_DOWN));
+        openInNewTab_MenuItem.setOnAction(this::openInNewTab_Action);
+
+
         file_Menu = new Menu("Main");
-        file_Menu.getItems().addAll(createNewTab_MenuItem, copyFileName_MenuItem, copyAbsoluteNamePath_MenuItem,
+        file_Menu.getItems().addAll(createNewTab_MenuItem, openInNewTab_MenuItem, new SeparatorMenuItem(),
+                copyFileName_MenuItem, copyAbsoluteNamePath_MenuItem, new SeparatorMenuItem(),
                 openTerminalHere_MenuItem, new SeparatorMenuItem(), exit_MenuItem);
 
         goToParent_MenuItem = new MenuItem("Parent directory");
@@ -921,6 +928,8 @@ public class FM_GUI extends Application
         fileSystemName_Label.setText("?");
         currentPath_TextField.setText(FIlE_STORES_PATH);
         content_TabPane.getTabs().get(currentContentTabIndex).setText(FIlE_STORES_PATH);
+
+        openTerminalHere_MenuItem.setDisable(true);
     }
 
     private ArrayList<Path> defineDrives()
@@ -1064,8 +1073,12 @@ public class FM_GUI extends Application
         /*Нужно создавать новые обьекты. Старые не отображаются.*/
         MenuItem createFile_contextMenuForFilesItem = new MenuItem("Create File");
         createFile_contextMenuForFilesItem.setOnAction(this::createFile_MenuItem_Action);
+
         MenuItem createDirectory_contextMenuForFilesItem = new MenuItem("Create Directory");
         createDirectory_contextMenuForFilesItem.setOnAction(this::createDirectory_MenuItem_Action);
+
+        MenuItem openInNewTab_contextMenuForFilesItem = new MenuItem("Open in new tab");
+        openInNewTab_contextMenuForFilesItem.setOnAction(this::openInNewTab_Action);
 
         MenuItem createSymbolicLink_contextMenuForFilesItem = new MenuItem("Create Symbolic link");
         createSymbolicLink_contextMenuForFilesItem.setOnAction(this::createSymbolicLink_MenuItem_Action);
@@ -1089,7 +1102,8 @@ public class FM_GUI extends Application
         MenuItem deleteFile_contextMenuForFilesItem = new MenuItem("Delete");
         deleteFile_contextMenuForFilesItem.setOnAction(this::delete_MenuItem_Action);
 
-        contextMenuForFiles.getItems().addAll(createFile_contextMenuForFilesItem,
+        contextMenuForFiles.getItems().addAll(openInNewTab_contextMenuForFilesItem, new SeparatorMenuItem(),
+                createFile_contextMenuForFilesItem,
                 createDirectory_contextMenuForFilesItem, createSymbolicLink_contextMenuForFilesItem,
                 new SeparatorMenuItem(), copyFileToClipboard_contextMenuForFilesItem,
                 moveFilesToClipboard_contextMenuForFilesItem, pasteFileFromClipboard_contextMenuForFilesItem,
@@ -1151,10 +1165,11 @@ public class FM_GUI extends Application
         }
         if (Files.isSymbolicLink(destinationPath))
         {
-            System.out.println("Символическая ссылка.");
             try
             {
-                destinationPath = Files.readSymbolicLink(destinationPath).toAbsolutePath();
+                //destinationPath = Files.readSymbolicLink(destinationPath).toAbsolutePath();
+                destinationPath = currentPath.get(currentContentTabIndex).resolve(Files.readSymbolicLink(destinationPath));
+                destinationPath = destinationPath.toAbsolutePath();
             }
             catch (IOException ioException)
             {
@@ -1179,6 +1194,10 @@ public class FM_GUI extends Application
         if (createNewTab_MenuItem.isDisable())
         {
             createNewTab_MenuItem.setDisable(false);
+        }
+        if (openTerminalHere_MenuItem.isDisable())
+        {
+            openTerminalHere_MenuItem.setDisable(false);
         }
 
         //Скорее всего из-за обращения к корневому каталогу /
@@ -1210,6 +1229,7 @@ public class FM_GUI extends Application
         }
 
         changeFileSystemLabelTextAndColor();
+        //registerWatchService(destinationPath);
 
         return true;
     }
@@ -1345,6 +1365,12 @@ public class FM_GUI extends Application
 
         if (keyRelease_KeyCode == KeyCode.ENTER)
         {
+            if (quickSearchInCurrentFolder_Popup != null &&
+                    quickSearchInCurrentFolder_Popup.isShowing())
+            {
+                quickSearchInCurrentFolder_Popup.hide();
+            }
+
             previousSelectedFileIndex = activatedTreeTableView.getSelectionModel().getSelectedIndex();
 
             if (currentPath.size() != 0 &&
@@ -1358,14 +1384,9 @@ public class FM_GUI extends Application
                 goToPath(Paths.get(activatedTreeTableView.getSelectionModel().getSelectedItem().getValue().getName()));
             }
 
-            if (quickSearchInCurrentFolder_Popup.isShowing())
-            {
-                quickSearchInCurrentFolder_Popup.hide();
-            }
         }
         else if (keyRelease_KeyCode == KeyCode.F2)
         {
-            System.out.println("Огонь");
             rename_MenuItem.fire();
         }
         else if (keyRelease_KeyCode == KeyCode.PAGE_UP && event.isControlDown())
@@ -1384,6 +1405,15 @@ public class FM_GUI extends Application
                 currentPath_TextField.requestFocus();
             });
         }
+        else if (keyRelease_KeyCode == KeyCode.F12)
+        {
+            long startTime = System.nanoTime();
+            walkPathsThroughListMethod(currentPath.get(currentContentTabIndex).toFile().getPath());
+
+            System.out.println("Времени потрачено: " + (System.nanoTime() - startTime));
+            System.out.println("Файлов: " + countFiles);
+            countFiles = 0;
+        }
         else if (keyRelease_KeyCode.getCode() >= 48 &&
                 keyRelease_KeyCode.getCode() <= 90 && !event.isControlDown())
         {
@@ -1401,11 +1431,9 @@ public class FM_GUI extends Application
                 quickSearchKey_TextField.setText(event.getText());
                 quickSearchInCurrentFolder_Popup.show(stage, stage.getX(), stage.getY() + stage.getHeight()
                         + stage.getHeight() * 0.01D);
-
+                quickSearchKey_TextField.requestFocus();
+                quickSearchKey_TextField.end();
             }
-
-            quickSearchKey_TextField.deselect();
-            quickSearchKey_TextField.end();
         }
     }
 
@@ -1505,61 +1533,62 @@ public class FM_GUI extends Application
 
     private void delete_MenuItem_Action(ActionEvent eventDelete)
     {
-        System.out.println("Запрос на удаление");
+        ObservableList<TreeItem<FileData>> selectionModelItems = activatedTreeTableView.getSelectionModel().getSelectedItems();
+        Path temporaryCurrentPath = currentPath.get(currentContentTabIndex);
+        Path[] paths = new Path[selectionModelItems.size()];
 
-        VBox filesToDeleting_VBox = new VBox(rem * 0.15D);
-        Label[] files_Labels = null;
-
-        ObservableList<TreeItem<FileData>> files_ObservableList = activatedTreeTableView.getSelectionModel().getSelectedItems();
-        files_Labels = new Label[files_ObservableList.size()];
-        for (int k = 0; k < files_ObservableList.size(); k++)
+        for (int k = 0; k < paths.length; k++)
         {
-            files_Labels[k] = new Label(files_ObservableList.get(k).getValue().getName());
-            filesToDeleting_VBox.getChildren().add(files_Labels[k]);
+            paths[k] = temporaryCurrentPath.resolve(selectionModelItems.get(k).getValue().getName());
         }
 
-
-        confirmOperationDialog.setHeaderText("Delete");
-        confirmOperationDialog.setHeaderColor(Color.INDIANRED);
-        confirmOperationDialog.setMessageText("Are you sure You want to delete this file ?");
-        confirmOperationDialog.setOperationButtons(ConfirmDialogButtonType.CANCEL, ConfirmDialogButtonType.OK);
-        confirmOperationDialog.setContent(filesToDeleting_VBox);
-        confirmOperationDialog.setBackgroundToRootNode(new Background(
-                new BackgroundFill(Color.DARKSALMON, CornerRadii.EMPTY, Insets.EMPTY)));
-        confirmOperationDialog.setMessageTextColor(Color.BLACK);
-        confirmOperationDialog.setMessageTextFont(Font.font(Font.getDefault().getName(),
-                FontWeight.BOLD, 13.0D));
-        confirmOperationDialog.showAndWait();
-        System.out.println("Выбрана кнопка: " + confirmOperationDialog.getActivatedOperationButton().name());
-
-        if (confirmOperationDialog.getActivatedOperationButton() == ConfirmDialogButtonType.OK)
+        if (deleteFileDialog == null)
         {
-            try
+            deleteFileDialog = new DeleteFileDialog(this);
+        }
+        deleteFileDialog.setTargetPaths(paths);
+        deleteFileDialog.show();
+    }
+
+    /**
+     * Нужна для обработки результатов удаления.
+     */
+    public void updateFilesListAfterDeleting(final DeleteOperationResult deleteOperationResult)
+    {
+        if (deleteOperationResult == DeleteOperationResult.CANCELED
+                || deleteOperationResult == DeleteOperationResult.COMPLETED_WITH_ERRORS)
+        {
+            goToPath(currentPath.get(currentContentTabIndex));
+        }
+        else
+        {
+            if (currentPath.get(currentContentTabIndex).equals(deleteFileDialog.getFilesToDeleting()[0].getParent()))
             {
-                String temporaryName = null;
-                Path temporaryPath = null;
-                for (int k = 0; k < files_ObservableList.size(); k++)
+                Path[] deletedFiles = deleteFileDialog.getFilesToDeleting();
+                if (deletedFiles != null)
                 {
-                    temporaryName = files_ObservableList.get(k).getValue().getName();
-                    temporaryPath = currentPath.get(currentContentTabIndex).resolve(Paths.get(temporaryName));
-                    System.out.println("На удаление: " + temporaryPath.toAbsolutePath().toString());
-                    if (deleteFileRecursively(temporaryPath))
+                    ObservableList<TreeItem<FileData>> children = activatedTreeTableView.getRoot().getChildren();
+
+                    for (Path temporaryDeletedPath : deletedFiles)
                     {
-                        System.out.println("Успешно удалено.");
-                        System.out.println("Элемент: " + files_ObservableList.get(k).getValue().getName());
+                        for (int k = 0; k < children.size(); k++)
+                        {
+                            if (children.get(k).getValue().getName().equals(temporaryDeletedPath.getFileName().toString()))
+                            {
+                                children.remove(k);
+                                System.out.println("Удалено из списка: " + temporaryDeletedPath.getFileName());
+                                break;
+                            }
+                        }
                     }
-
                 }
-
-                removeSelectedRowsFromTreeTableView();
-                //26_606_006, 11_151_432, 10_097_724
-                //1_105_428, 1_021_908, 1_301_037
             }
-            catch (IOException ioException)
+            else
             {
-                ioException.printStackTrace();
+                goToPath(currentPath.get(currentContentTabIndex));
             }
         }
+
     }
 
 
@@ -2679,6 +2708,9 @@ public class FM_GUI extends Application
         newTab.setOnCloseRequest(eventCloseRequest ->
         {
             currentPath.remove(currentContentTabIndex);
+            allTreeTableViewWithFiles_ArrayList.remove(currentContentTabIndex);
+            allContainersWithFiles_ArrayList.remove(currentContentTabIndex);
+            allIsDirectoryColumns_ArrayList.remove(currentContentTabIndex);
         });
 
         content_TabPane.getTabs().add(newTab);
@@ -2774,8 +2806,9 @@ public class FM_GUI extends Application
     {
         Path temporaryPath = currentPath.get(currentContentTabIndex).resolve(activatedTreeTableView.getSelectionModel().getSelectedItem().getValue().getName());
 
-        FileAttributesEditor fae = new FileAttributesEditor(temporaryPath);
-        fae.show();
+
+        fileAttributesEditor = new FileAttributesEditor(temporaryPath);
+        fileAttributesEditor.show();
     }
 
     private void addActionToOpenTerminalMenuItem(ActionEvent event)
@@ -2985,8 +3018,6 @@ public class FM_GUI extends Application
     }
 
 
-    private CreateSymbolicLinkDialog createSymbolicLinkDialog;
-
     private void createSymbolicLink_MenuItem_Action(ActionEvent event)
     {
         Path temporaryTargetLinkPath = currentPath.get(currentContentTabIndex).resolve(
@@ -3068,6 +3099,95 @@ public class FM_GUI extends Application
         activatedTreeTableView.scrollTo(0);
     }
 
+//    private void registerWatchService(final Path targetPath)
+//    {
+//        Thread watchThread = new Thread(()->
+//        {
+//            try
+//            {
+//                WatchService watchService = targetPath.getFileSystem().newWatchService();
+//
+//                WatchKey watchKey = targetPath.register(watchService, StandardWatchEventKinds.ENTRY_CREATE,
+//                        StandardWatchEventKinds.ENTRY_DELETE, StandardWatchEventKinds.ENTRY_MODIFY);
+//
+//                WatchKey temporaryKey;
+//
+//                while ((temporaryKey = watchService.take()) != null)
+//                {
+//                    for (WatchEvent<?> event : temporaryKey.pollEvents())
+//                    {
+//                        System.out.println("Тип события: " + event.kind());
+//                        System.out.println("Зайл затронут: " + event.context());
+//                        Platform.runLater(() ->
+//                        {
+//                            goToPath(currentPath.get(currentContentTabIndex));
+//                        });
+//                    }
+//                    temporaryKey.reset();
+//                }
+//            }
+//            catch (IOException ioException)
+//            {
+//                ioException.printStackTrace();
+//            }
+//            catch(InterruptedException interruptedException)
+//            {
+//                interruptedException.printStackTrace();
+//            }
+//        },"watch Thread");
+//        watchThread.start();
+//
+//    }
+
+    private int countFiles = 0;
+
+    private void walkPathsThroughListMethod(String dirPath)
+    {
+        File walkDir = new File(dirPath);
+        String[] dirList = walkDir.list();
+
+        for (int k = 0; k < dirList.length; k++)
+        {
+            File f = new File(dirPath + "/" + dirList[k]);
+            //System.out.println(f.toString());
+            countFiles++;
+            if (f.isDirectory())
+            {
+                walkPathsThroughListMethod(f.getPath());
+            }
+        }
+
+    }
+
+    private void openInNewTab_Action(ActionEvent event)
+    {
+        Path temporarySelectedFilePath = currentPath.get(currentContentTabIndex).resolve(
+                activatedTreeTableView.getSelectionModel().getSelectedItem().getValue().getName());
+
+        if (Files.isDirectory(temporarySelectedFilePath, LinkOption.NOFOLLOW_LINKS))
+        {
+            createNewTab_Action(event);
+            currentPath.remove(currentPath.size() - 1);
+            currentPath.add(temporarySelectedFilePath);
+
+            if (temporarySelectedFilePath.getFileName() != null)
+            {
+                content_TabPane.getTabs().get(content_TabPane.getTabs().size() - 1)
+                        .setText(temporarySelectedFilePath.getFileName().toString());
+            }
+            else
+            {
+                content_TabPane.getTabs().get(content_TabPane.getTabs().size() - 1)
+                        .setText(temporarySelectedFilePath.toAbsolutePath().toString());
+            }
+        }
+        else
+        {
+            System.out.println("Нельзя открыть файл в новой вкладке!");
+            return;
+        }
+
+    }
 
 }
 
