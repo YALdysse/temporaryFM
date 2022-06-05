@@ -29,6 +29,7 @@ public class FileData
     private boolean hasFile;
     private boolean hasSymbolicLink;
     private boolean hasWastedSymbolicLink;
+    private String extension;
     private Path symbolicLinkTargetPath;
 
     public FileData(String aName, long aSize)
@@ -41,6 +42,7 @@ public class FileData
         {
             name = "";
         }
+        extension = "";
     }
 
     public FileData(String aName, long aSize, String aOwner)
@@ -58,6 +60,7 @@ public class FileData
         {
             aOwner = "";
         }
+        extension="";
     }
 
 
@@ -229,9 +232,14 @@ public class FileData
         }
         else if (hasFile)
         {
-            return "File";
+            return "File " + extension;
         }
         return "Other";
+    }
+
+    public void setExtension(final String newExtension)
+    {
+        extension = newExtension;
     }
 
     public boolean isDirectory()
