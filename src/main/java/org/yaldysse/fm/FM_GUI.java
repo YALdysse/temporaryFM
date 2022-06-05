@@ -7,6 +7,7 @@ import javafx.application.HostServices;
 import javafx.application.Platform;
 import javafx.beans.property.ReadOnlyObjectWrapper;
 import javafx.beans.property.ReadOnlyStringWrapper;
+import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.event.ActionEvent;
 import javafx.event.EventHandler;
@@ -98,6 +99,12 @@ public class FM_GUI extends Application
     private int previousSelectedFileIndex;
     private DateTimeFormatter dateTimeIsoFormatter;
     private double fileIconHeight;
+    /**
+     * Предназначен для хранения всех объектов TreeItem, чтобы
+     * за каждым разом не создавать новые.
+     */
+    private ObservableList<TreeItem<FileData>> treeItemsSaver;
+    private ArrayList<FileData> fileDataSaver;
 
     private MenuBar menu_Bar;
     private Menu file_Menu;
@@ -696,6 +703,13 @@ public class FM_GUI extends Application
                     + content_TabPane.getSelectionModel().getSelectedIndex());
             currentContentTabIndex = content_TabPane.getSelectionModel().getSelectedIndex();
 
+            /*Нужно затереть с предыдущей таблицы, иначе пропадут значки.
+             * Внимание: актуально только для текущего поведения. В данном
+             * варианте при переходе на каждую вкладку элементы таблиц удаляются
+             * из нее, а объекты используются повторно. Это дает ощутимый выигрыш
+             * в скорости работы.*/
+            activatedTreeTableView.getRoot().getChildren().clear();
+
             activatedTreeTableView = allTreeTableViewWithFiles_ArrayList.get(currentContentTabIndex);
             currentNameColumn = findColumnByStringID(NAME_COLUMN_ID);
             currentTypeColumn = findColumnByStringID(TYPE_COLUMN_ID);
@@ -719,6 +733,8 @@ public class FM_GUI extends Application
         allIsDirectoryColumns_ArrayList = new ArrayList<>();
         allTreeTableViewWithFiles_ArrayList = new ArrayList<>();
         allTreeTableViewWithFiles_ArrayList.add(content_TreeTableView);
+        treeItemsSaver = FXCollections.observableArrayList();
+        fileDataSaver = new ArrayList<>();
 
         activatedTreeTableView = content_TreeTableView;
         currentNameColumn = nameColumn;
@@ -815,7 +831,7 @@ public class FM_GUI extends Application
                 else
                 {
                     useFirstName = false;
-                    System.out.println("Несуществууут");
+                    System.out.println("Не существует");
                 }
 
                 //Скорее всего Windows гафно!
@@ -1255,68 +1271,72 @@ public class FM_GUI extends Application
 
         currentRootItem.getChildren().clear();
 
-        try (Stream<Path> filesStream = Files.list(destinationPath))
+        String[] directoryItems = destinationPath.toFile().list();
+
+        FileData temporaryFileData = null;
+        int treeItemIndex = 0;
+        int fileDataIndex = 0;
+
+        for (String temporaryItem : directoryItems)
         {
-            Iterator<Path> iterator = filesStream.iterator();
-            FileData temporaryFileData = null;
-            while (iterator.hasNext())
+            Path temporaryPath = destinationPath.resolve(temporaryItem);
+
+            try
             {
-                Path temporaryPath = iterator.next();
-
-                try
+                //temporaryFileData = new FileData(temporaryPath.getFileName().toString(), Files.size(temporaryPath));
+                temporaryFileData = reuseFileDataObjects(fileDataIndex);
+                temporaryFileData.setName(temporaryPath.getFileName().toString());
+                temporaryFileData.setSize(Files.size(temporaryPath));
+                if (currentOwnerColumn.isVisible())
                 {
-                    temporaryFileData = new FileData(temporaryPath.getFileName().toString(), Files.size(temporaryPath));
-                    if (currentOwnerColumn.isVisible())
-                    {
-                        temporaryFileData.setOwner(Files.getOwner(temporaryPath).getName());
-                    }
-                    if (currentLastModifiedTimeColumn.isVisible())
-                    {
-                        temporaryFileData.setLastModifiedTime(Files.getLastModifiedTime(temporaryPath));
-                    }
-                    if (currentCreationTimeColumn.isVisible())
-                    {
-                        temporaryFileData.setCreationTime(Files.readAttributes(temporaryPath, BasicFileAttributes.class).creationTime());
-                    }
-                    temporaryFileData.setDirectory(Files.isDirectory(temporaryPath));
-                    temporaryFileData.setFile(Files.isRegularFile(temporaryPath));
-                    temporaryFileData.setSymbolicLink(Files.isSymbolicLink(temporaryPath));
-
-                    if(temporaryFileData.isFile())
-                    {
-                        temporaryFileData.setExtension(getExtension(temporaryPath));
-                    }
-                    if (temporaryFileData.isSymbolicLink())
-                    {
-                        Path temporaryCurrentPath = currentPath.get(currentContentTabIndex);
-                        Path symbolicLinkPath = Files.readSymbolicLink(temporaryCurrentPath.resolve(temporaryPath.getFileName()));
-                        temporaryFileData.setSymbolicLinkPath(temporaryCurrentPath.resolve(symbolicLinkPath));
-                    }
-
-                    TreeItem<FileData> temporaryTreeItem = new TreeItem<>(temporaryFileData);
-                    determineIconToTreeItem(temporaryFileData, temporaryTreeItem);
-
-                    currentRootItem.getChildren().add(temporaryTreeItem);
+                    temporaryFileData.setOwner(Files.getOwner(temporaryPath).getName());
                 }
-                catch (NoSuchFileException noSuchFileException)
+                if (currentLastModifiedTimeColumn.isVisible())
                 {
-                    System.out.println("Скорее всего битая символическая ссылка " + temporaryPath.
-                            getFileName().toString());
-                    temporaryFileData = new FileData(temporaryPath.getFileName().toString(), -1);
-                    temporaryFileData.setSymbolicLink(true);
-                    temporaryFileData.setWastedSymbolicLink(true);
-                    TreeItem<FileData> temporaryTreeItem = new TreeItem<>(temporaryFileData);
-                    applyIconForTreeItem(temporaryTreeItem, brokenLink_Image, fileIconHeight);
-                    currentRootItem.getChildren().add(temporaryTreeItem);
+                    temporaryFileData.setLastModifiedTime(Files.getLastModifiedTime(temporaryPath));
                 }
-                catch (IOException ioException)
+                if (currentCreationTimeColumn.isVisible())
                 {
-                    ioException.printStackTrace();
+                    temporaryFileData.setCreationTime(Files.readAttributes(temporaryPath, BasicFileAttributes.class).creationTime());
+                }
+                temporaryFileData.setDirectory(Files.isDirectory(temporaryPath));
+                temporaryFileData.setFile(Files.isRegularFile(temporaryPath));
+                temporaryFileData.setSymbolicLink(Files.isSymbolicLink(temporaryPath));
+
+                if (temporaryFileData.isFile())
+                {
+                    temporaryFileData.setExtension(getExtension(temporaryPath));
+                }
+                if (temporaryFileData.isSymbolicLink())
+                {
+                    Path temporaryCurrentPath = currentPath.get(currentContentTabIndex);
+                    Path symbolicLinkPath = Files.readSymbolicLink(temporaryCurrentPath.resolve(temporaryPath.getFileName()));
+                    temporaryFileData.setSymbolicLinkPath(temporaryCurrentPath.resolve(symbolicLinkPath));
                 }
 
+                TreeItem<FileData> temporaryTreeItem = reuseTreeItemObjects(treeItemIndex, temporaryFileData);
+                determineIconToTreeItem(temporaryFileData, temporaryTreeItem);
+                treeItemIndex++;
+                fileDataIndex++;
+                currentRootItem.getChildren().add(temporaryTreeItem);
             }
-
+            catch (NoSuchFileException noSuchFileException)
+            {
+                System.out.println("Скорее всего битая символическая ссылка " + temporaryPath.
+                        getFileName().toString());
+                temporaryFileData = new FileData(temporaryPath.getFileName().toString(), -1);
+                temporaryFileData.setSymbolicLink(true);
+                temporaryFileData.setWastedSymbolicLink(true);
+                TreeItem<FileData> temporaryTreeItem = new TreeItem<>(temporaryFileData);
+                applyIconForTreeItem(temporaryTreeItem, brokenLink_Image, fileIconHeight);
+                currentRootItem.getChildren().add(temporaryTreeItem);
+            }
+            catch (IOException ioException)
+            {
+                ioException.printStackTrace();
+            }
         }
+
         if (activatedTreeTableView.getExpandedItemCount() != 0)
         {
             activatedTreeTableView.getSelectionModel().clearSelection();
@@ -1333,6 +1353,43 @@ public class FM_GUI extends Application
             activatedTreeTableView.getSelectionModel().select(0);
         }
         return true;
+    }
+
+    /**
+     * Предназначен для повторного использования уже существующих объектов
+     * типа TreeItem.
+     */
+    private TreeItem<FileData> reuseTreeItemObjects(final int treeItemIndex, FileData temporaryFileData)
+    {
+        TreeItem<FileData> temporaryTreeItem = null;
+
+        if (treeItemIndex >= treeItemsSaver.size())
+        {
+            temporaryTreeItem = new TreeItem<>(temporaryFileData);
+            treeItemsSaver.add(temporaryTreeItem);
+            //System.out.println("TreeItem создан");
+        }
+        else
+        {
+            temporaryTreeItem = treeItemsSaver.get(treeItemIndex);
+            temporaryTreeItem.setValue(temporaryFileData);
+        }
+        return temporaryTreeItem;
+    }
+
+    private FileData reuseFileDataObjects(final int fileDataIndex)
+    {
+        FileData temporaryFileData = null;
+        if (fileDataIndex >= fileDataSaver.size())
+        {
+            temporaryFileData = new FileData("", 1);
+            fileDataSaver.add(temporaryFileData);
+        }
+        else
+        {
+            temporaryFileData = fileDataSaver.get(fileDataIndex);
+        }
+        return temporaryFileData;
     }
 
     /**
@@ -1567,7 +1624,7 @@ public class FM_GUI extends Application
             activatedTreeTableView.getColumns().remove(currentIsDirectoryColumn);
         }
 
-        System.out.println("requestSort() duration: " + (System.currentTimeMillis()-startTime));
+        System.out.println("requestSort() duration: " + (System.currentTimeMillis() - startTime));
     }
 
 
@@ -3180,7 +3237,7 @@ public class FM_GUI extends Application
 
             if (extensionStartIndex > 0)
             {
-                extension = targetPath.getFileName().toString().substring(extensionStartIndex+1);
+                extension = targetPath.getFileName().toString().substring(extensionStartIndex + 1);
                 extension = extension.toUpperCase();
             }
         }
