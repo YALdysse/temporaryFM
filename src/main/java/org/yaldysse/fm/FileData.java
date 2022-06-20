@@ -60,7 +60,7 @@ public class FileData
         {
             aOwner = "";
         }
-        extension="";
+        extension = "";
     }
 
 
@@ -123,7 +123,7 @@ public class FileData
 
     public void setWastedSymbolicLink(boolean value)
     {
-        hasWastedSymbolicLink=value;
+        hasWastedSymbolicLink = value;
     }
 
     public void setSymbolicLinkPath(final Path targetPath)
@@ -213,7 +213,7 @@ public class FileData
     {
         if (hasSymbolicLink)
         {
-            if(hasWastedSymbolicLink)
+            if (hasWastedSymbolicLink)
             {
                 return "Wasted symbolic link";
             }

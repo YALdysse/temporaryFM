@@ -1,5 +1,6 @@
 package org.yaldysse.fm;
 
+import com.sun.source.tree.Tree;
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
 import javafx.application.Application;
@@ -11,11 +12,19 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.event.ActionEvent;
 import javafx.event.EventHandler;
+import javafx.geometry.Bounds;
 import javafx.geometry.Insets;
+import javafx.geometry.Point2D;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
+import javafx.scene.control.Label;
+import javafx.scene.control.Menu;
+import javafx.scene.control.MenuBar;
+import javafx.scene.control.MenuItem;
+import javafx.scene.control.ScrollPane;
+import javafx.scene.control.TextField;
 import javafx.scene.control.skin.TableColumnHeader;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
@@ -26,6 +35,7 @@ import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.scene.text.Text;
 import javafx.stage.*;
+import javafx.stage.Window;
 import javafx.util.Callback;
 import javafx.util.Duration;
 import org.yaldysse.fm.dialogs.*;
@@ -41,7 +51,7 @@ import java.nio.file.attribute.*;
 import java.time.*;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
-import java.util.stream.Collectors;
+import java.util.List;
 import java.util.stream.Stream;
 
 
@@ -51,7 +61,6 @@ import java.util.stream.Stream;
  * 4 [Функционал]: Авто обновление таблицы файлов.
  * 5 [Функционал]: Реализовать возврат предыдущего выделения при переходе в родительский каталог,
  * но только на один уровень.
- * 6 [Функционал]: Не работает вырезание файлов.
  */
 public class FM_GUI extends Application
 {
@@ -96,7 +105,6 @@ public class FM_GUI extends Application
     private CustomTreeTableColumn<FileData, ?> lastActiveSortColumn;
     private boolean filesToMoveFromClipboard = false;
     private int currentContentTabIndex;
-    private int previousSelectedFileIndex;
     private DateTimeFormatter dateTimeIsoFormatter;
     private double fileIconHeight;
     /**
@@ -146,6 +154,9 @@ public class FM_GUI extends Application
     private MenuItem showOrEditAttributes_MenuItem;
     private MenuItem openTerminalHere_MenuItem;
     private MenuItem openInNewTab_MenuItem;
+    private MenuItem openInCustomProgram_contextMenuForFilesItem;
+    private Menu openWith_Menu = new Menu("Open with ...");
+
 
     private CheckMenuItem autoSizeColumn_MenuItem;
 
@@ -649,7 +660,7 @@ public class FM_GUI extends Application
             {
                 CustomTreeTableCell<FileData, String> temporaryCell = new CustomTreeTableCell<>();
                 //temporaryCell.setTextFill(Color.LIGHTSKYBLUE);
-                //temporaryCell.setFont(cellFont);
+                temporaryCell.setFont(cellFont);
                 temporaryCell.setPadding(new Insets(0.0D, 0.0D, 0.0, rem * 0.2D));
                 temporaryCell.setOnMouseClicked(mouseClickEvent);
                 return temporaryCell;
@@ -666,7 +677,10 @@ public class FM_GUI extends Application
 
                 Path newPath = Paths.get(currentPath_TextField.getText());
                 System.out.println("Новый путь: " + newPath);
-                goToPath(newPath);
+                if (Files.isDirectory(newPath, LinkOption.NOFOLLOW_LINKS))
+                {
+                    goToPath(newPath);
+                }
             }
         });
 
@@ -1087,6 +1101,7 @@ public class FM_GUI extends Application
     private void initializeContextMenuForFiles()
     {
         contextMenuForFiles = new ContextMenu();
+        contextMenuForFiles.setOnShowing(this::contextMenuForFiles_ShowingAction);
 
         /*Нужно создавать новые обьекты. Старые не отображаются.*/
         MenuItem createFile_contextMenuForFilesItem = new MenuItem("Create File");
@@ -1098,8 +1113,16 @@ public class FM_GUI extends Application
         MenuItem openInNewTab_contextMenuForFilesItem = new MenuItem("Open in new tab");
         openInNewTab_contextMenuForFilesItem.setOnAction(this::openInNewTab_Action);
 
-        MenuItem openInCustomProgram_contextMenuForFilesItem = new MenuItem("Open with ...");
+
+        MenuItem openInSystem_contextMenuForFilesItem = new MenuItem("System");
+        openInSystem_contextMenuForFilesItem.setOnAction(this::openFileInSystem_Action);
+
+        openInCustomProgram_contextMenuForFilesItem = new MenuItem("Select program...");
         openInCustomProgram_contextMenuForFilesItem.setOnAction(this::openWithCustomProgram_Action);
+
+        openWith_Menu = new Menu("Open with ...");
+        openWith_Menu.getItems().addAll(openInSystem_contextMenuForFilesItem,
+                openInCustomProgram_contextMenuForFilesItem);
 
         MenuItem openInDefaultProgram_contextMenuForFilesItem = new MenuItem("Open");
         openInDefaultProgram_contextMenuForFilesItem.setOnAction(this::openInDefaultProgram_Action);
@@ -1116,7 +1139,6 @@ public class FM_GUI extends Application
             copyFilesToClipboard_MenuItem_Action(event);
             filesToMoveFromClipboard = true;
         });
-        moveFilesToClipboard_contextMenuForFilesItem.setDisable(true);
 
         MenuItem pasteFileFromClipboard_contextMenuForFilesItem = new MenuItem("Paste");
         pasteFileFromClipboard_contextMenuForFilesItem.setOnAction(this::pasteFiles_MenuItem_Action);
@@ -1127,7 +1149,7 @@ public class FM_GUI extends Application
         MenuItem deleteFile_contextMenuForFilesItem = new MenuItem("Delete");
         deleteFile_contextMenuForFilesItem.setOnAction(this::delete_MenuItem_Action);
 
-        contextMenuForFiles.getItems().addAll(openInDefaultProgram_contextMenuForFilesItem, openInCustomProgram_contextMenuForFilesItem,
+        contextMenuForFiles.getItems().addAll(openInDefaultProgram_contextMenuForFilesItem, openWith_Menu,
                 openInNewTab_contextMenuForFilesItem, new SeparatorMenuItem(),
                 createFile_contextMenuForFilesItem,
                 createDirectory_contextMenuForFilesItem, createSymbolicLink_contextMenuForFilesItem,
@@ -1182,11 +1204,6 @@ public class FM_GUI extends Application
         if (!Files.exists(destinationPath))
         {
             System.out.println("Данного пути не существует.");
-            return false;
-        }
-        if (Files.isRegularFile(destinationPath))
-        {
-            System.out.println("Переход отменен. Это файл!");
             return false;
         }
         if (Files.isSymbolicLink(destinationPath))
@@ -1393,7 +1410,7 @@ public class FM_GUI extends Application
     }
 
     /**
-     * Возвращается к родительскому элементу пути.
+     * Возвращается к родительскому элементу пути и выделяет его.
      */
     public boolean goToParentPath(Path path)
     {
@@ -1405,9 +1422,31 @@ public class FM_GUI extends Application
         if (goToPath(path.getParent()))
         {
             activatedTreeTableView.getSelectionModel().clearSelection();
-            activatedTreeTableView.getSelectionModel().select(previousSelectedFileIndex);
-            activatedTreeTableView.scrollTo(previousSelectedFileIndex - 2);
-            previousSelectedFileIndex = 0;
+
+            String fileName = path.getFileName().toString();
+            int indexToSelect = -1;
+            if (fileName != null)
+            {
+                ObservableList<TreeItem<FileData>> items = activatedTreeTableView.getRoot().getChildren();
+                for (int k = 0; k < items.size(); k++)
+                {
+                    if (items.get(k).getValue().getName().equals(fileName))
+                    {
+                        indexToSelect = k;
+                        break;
+                    }
+                }
+            }
+            if (indexToSelect != -1)
+            {
+                activatedTreeTableView.getSelectionModel().select(indexToSelect);
+                activatedTreeTableView.scrollTo(indexToSelect - 2);
+            }
+            else
+            {
+                activatedTreeTableView.getSelectionModel().select(0);
+                activatedTreeTableView.scrollTo(0);
+            }
             return true;
         }
         return false;
@@ -1443,8 +1482,6 @@ public class FM_GUI extends Application
             {
                 quickSearchInCurrentFolder_Popup.hide();
             }
-
-            previousSelectedFileIndex = activatedTreeTableView.getSelectionModel().getSelectedIndex();
 
             if (currentPath.size() != 0 &&
                     currentPath.get(currentContentTabIndex) != null)
@@ -1486,18 +1523,16 @@ public class FM_GUI extends Application
                 currentPath_TextField.requestFocus();
             });
         }
+        else if (keyRelease_KeyCode == KeyCode.CONTEXT_MENU)
+        {
+            Point2D p = activatedTreeTableView.localToScreen(0, 0);
+            //Bounds b = activatedTreeTableView.localToScreen(activatedTreeTableView.getBoundsInLocal());
+            //System.out.println("X: " + p.getX()+ "\tY: " + p.getY());
+            contextMenuForFiles.show(stage, p.getX(), p.getY());
+        }
         else if (keyRelease_KeyCode == KeyCode.F11)
         {
 
-        }
-        else if (keyRelease_KeyCode == KeyCode.F12)
-        {
-            long startTime = System.nanoTime();
-            walkPathsThroughListMethod(currentPath.get(currentContentTabIndex).toFile().getPath());
-
-            System.out.println("Времени потрачено: " + (System.nanoTime() - startTime));
-            System.out.println("Файлов: " + countFiles);
-            countFiles = 0;
         }
         else if (keyRelease_KeyCode.getCode() >= 48 &&
                 keyRelease_KeyCode.getCode() <= 90 && !event.isControlDown())
@@ -1530,7 +1565,6 @@ public class FM_GUI extends Application
         if (event.getButton() == MouseButton.PRIMARY &&
                 event.getClickCount() == 2)
         {
-            previousSelectedFileIndex = activatedTreeTableView.getSelectionModel().getSelectedIndex();
 
             if (currentPath.size() != 0 &&
                     currentPath.get(currentContentTabIndex) != null)
@@ -1721,39 +1755,6 @@ public class FM_GUI extends Application
 
     }
 
-
-    private boolean deleteFileRecursively(Path targetPath) throws IOException
-    {
-        if (!Files.exists(targetPath, LinkOption.NOFOLLOW_LINKS))
-        {
-            return false;
-        }
-
-        if (Files.isRegularFile(targetPath, LinkOption.NOFOLLOW_LINKS) || Files.isSymbolicLink(targetPath))
-        {
-            Files.delete(targetPath);
-        }
-        else if (Files.isDirectory(targetPath))
-        {
-            Stream<Path> pathsStream = Files.list(targetPath);
-            List<Path> pathsList = pathsStream.collect(Collectors.toList());
-            if (pathsList.size() == 0)
-            {
-                Files.delete(targetPath);
-            }
-            else
-            {
-                for (Path temporaryPath : pathsList)
-                {
-                    System.out.println(deleteFileRecursively(temporaryPath));
-                }
-                deleteFileRecursively(targetPath);
-            }
-
-        }
-
-        return true;
-    }
 
     /**
      * Пока, только для одиночного переименования
@@ -2338,6 +2339,7 @@ public class FM_GUI extends Application
         if (copyFilesDialog == null)
         {
             copyFilesDialog = new CopyFilesDialog(this);
+            copyFilesDialog.setMoveOperation(filesToMoveFromClipboard);
         }
         copyFilesDialog.setPathsToCopy(sourceFilesPaths, destinationFilesPaths);
         copyFilesDialog.show();
@@ -3140,54 +3142,31 @@ public class FM_GUI extends Application
 //
 //    }
 
-    private int countFiles = 0;
-
-    private void walkPathsThroughListMethod(String dirPath)
-    {
-        File walkDir = new File(dirPath);
-        String[] dirList = walkDir.list();
-
-        for (int k = 0; k < dirList.length; k++)
-        {
-            File f = new File(dirPath + "/" + dirList[k]);
-            //System.out.println(f.toString());
-            countFiles++;
-            if (f.isDirectory())
-            {
-                walkPathsThroughListMethod(f.getPath());
-            }
-        }
-
-    }
 
     private void openInNewTab_Action(ActionEvent event)
     {
         Path temporarySelectedFilePath = currentPath.get(currentContentTabIndex).resolve(
                 activatedTreeTableView.getSelectionModel().getSelectedItem().getValue().getName());
 
-        if (Files.isDirectory(temporarySelectedFilePath, LinkOption.NOFOLLOW_LINKS))
+        if (activatedTreeTableView.getSelectionModel().getSelectedItem().getValue().isFile())
         {
-            createNewTab_Action(event);
-            currentPath.remove(currentPath.size() - 1);
-            currentPath.add(temporarySelectedFilePath);
+            temporarySelectedFilePath = temporarySelectedFilePath.getParent();
+        }
 
-            if (temporarySelectedFilePath.getFileName() != null)
-            {
-                content_TabPane.getTabs().get(content_TabPane.getTabs().size() - 1)
-                        .setText(temporarySelectedFilePath.getFileName().toString());
-            }
-            else
-            {
-                content_TabPane.getTabs().get(content_TabPane.getTabs().size() - 1)
-                        .setText(temporarySelectedFilePath.toAbsolutePath().toString());
-            }
+        createNewTab_Action(event);
+        currentPath.remove(currentPath.size() - 1);
+        currentPath.add(temporarySelectedFilePath);
+
+        if (temporarySelectedFilePath.getFileName() != null)
+        {
+            content_TabPane.getTabs().get(content_TabPane.getTabs().size() - 1)
+                    .setText(temporarySelectedFilePath.getFileName().toString());
         }
         else
         {
-            System.out.println("Нельзя открыть файл в новой вкладке!");
-            return;
+            content_TabPane.getTabs().get(content_TabPane.getTabs().size() - 1)
+                    .setText(temporarySelectedFilePath.toAbsolutePath().toString());
         }
-
     }
 
     private void openInDefaultProgram_Action(ActionEvent event)
@@ -3248,6 +3227,38 @@ public class FM_GUI extends Application
             return "";
         }
         return extension;
+    }
+
+    private void contextMenuForFiles_ShowingAction(WindowEvent event)
+    {
+        if (activatedTreeTableView.getSelectionModel().getSelectedItem().getValue().isDirectory())
+        {
+            //openInCustomProgram_contextMenuForFilesItem.setVisible(false);
+            openWith_Menu.setVisible(false);
+
+        }
+        else
+        {
+            if (!openInCustomProgram_contextMenuForFilesItem.isVisible())
+            {
+                //openInCustomProgram_contextMenuForFilesItem.setVisible(true);
+                openWith_Menu.setVisible(true);
+            }
+        }
+    }
+
+    private void openFileInSystem_Action(ActionEvent event)
+    {
+        ProcessBuilder processBuilder = new ProcessBuilder(currentPath.get(currentContentTabIndex).resolve(
+                activatedTreeTableView.getSelectionModel().getSelectedItem().getValue().getName()).toAbsolutePath().toString());
+        try
+        {
+            Process process = processBuilder.start();
+        }
+        catch (IOException ioException)
+        {
+            ioException.printStackTrace();
+        }
     }
 
 }

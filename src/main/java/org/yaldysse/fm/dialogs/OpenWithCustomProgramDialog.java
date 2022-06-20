@@ -6,6 +6,8 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
+import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
@@ -34,7 +36,10 @@ public class OpenWithCustomProgramDialog
     private TextField programName_TextField;
     private Button chooseProgram_Button;
     private Button execute_Button;
-    private CheckBox customCommand_CheckBox;
+    private RadioButton customCommand_RadioButton;
+    private RadioButton openInSystem_RadioButton;
+    private RadioButton programName_RadioButton;
+    private VBox programName_VBox;
 
     private BorderPane buttons_BorderPane;
     private Path filePath;
@@ -85,7 +90,8 @@ public class OpenWithCustomProgramDialog
         HBox.setHgrow(programName_TextField, Priority.ALWAYS);
         HBox.setHgrow(programNameAndChooser_HBox, Priority.ALWAYS);
 
-        VBox programName_VBox = new VBox(programName_Label, programNameAndChooser_HBox);
+        programName_VBox = new VBox(programName_Label, programNameAndChooser_HBox);
+        programName_VBox.setVisible(false);
 
         targetFile_Label = new Label("Open file '" + filePath.getFileName() + "' with program:");
         targetFile_Label.setWrapText(true);
@@ -94,10 +100,23 @@ public class OpenWithCustomProgramDialog
         command_TextField.setPromptText("Enter command to execute here");
         command_TextField.setVisible(false);
 
-        customCommand_CheckBox = new CheckBox("Use custom command");
-        customCommand_CheckBox.setOnAction(this::useCustomCommandCheckBox_Action);
+        ToggleGroup radioToggleGroup = new ToggleGroup();
 
-        VBox customCommand_VBox = new VBox(rem * 0.45D,customCommand_CheckBox,
+
+        customCommand_RadioButton = new RadioButton("Use custom command");
+        customCommand_RadioButton.setOnAction(this::useCustomCommandCheckBox_Action);
+        customCommand_RadioButton.setToggleGroup(radioToggleGroup);
+
+        openInSystem_RadioButton = new RadioButton("System");
+        openInSystem_RadioButton.setToggleGroup(radioToggleGroup);
+        openInSystem_RadioButton.setSelected(true);
+        openInSystem_RadioButton.setOnAction(this::openInSystemRadioButton_Action);
+
+        programName_RadioButton = new RadioButton("Use name of program");
+        programName_RadioButton.setOnAction(this::programNameRadioButton_Action);
+        programName_RadioButton.setToggleGroup(radioToggleGroup);
+
+        VBox customCommand_VBox = new VBox(rem * 0.45D, customCommand_RadioButton,
                 command_TextField);
         customCommand_VBox.setPadding(new Insets(rem * 1.15D, 0.0D, 0.0D, 0.0D));
 
@@ -105,6 +124,7 @@ public class OpenWithCustomProgramDialog
         execute_Button.setDisable(true);
         execute_Button.setOnAction(this::executeButton_Action);
 
+        execute_Button.setDisable(false);
 
         HBox buttons_HBox = new HBox(rem * 0.45D, execute_Button);
         buttons_HBox.setAlignment(Pos.BOTTOM_RIGHT);
@@ -121,10 +141,11 @@ public class OpenWithCustomProgramDialog
 //
 
         //root.setFillWidth(true);
-        root.getChildren().addAll(targetFile_Label, programName_VBox,
-                customCommand_VBox, buttons_BorderPane);
+        root.getChildren().addAll(targetFile_Label, programName_RadioButton,
+                programName_VBox, customCommand_VBox, buttons_BorderPane);
 
         scene = new Scene(root);
+        scene.setOnKeyReleased(this::scene_KeyPressed);
 
         stage = new Stage();
         stage.setMaxWidth(rem * 20.0D);
@@ -138,6 +159,7 @@ public class OpenWithCustomProgramDialog
     {
         FileChooser fileChooser = new FileChooser();
         fileChooser.setTitle("Select program");
+        fileChooser.setInitialDirectory(filePath.getParent().toFile());
         pathToProgram = fileChooser.showOpenDialog(null);
 
         if (pathToProgram != null)
@@ -149,7 +171,7 @@ public class OpenWithCustomProgramDialog
 
     private void executeButton_Action(ActionEvent event)
     {
-        if (pathToProgram != null && !customCommand_CheckBox.isSelected())
+        if (pathToProgram != null && !customCommand_RadioButton.isSelected())
         {
             ProcessBuilder processBuilder = new ProcessBuilder(pathToProgram.getAbsolutePath(),
                     filePath.toAbsolutePath().toString());
@@ -178,12 +200,24 @@ public class OpenWithCustomProgramDialog
                 ioException.printStackTrace();
             }
         }
-        else if (customCommand_CheckBox.isSelected() &&
+        else if (customCommand_RadioButton.isSelected() &&
                 command_TextField.getText() != null &&
                 !command_TextField.getText().equals(""))
         {
             System.out.println("Нету реализации.");
         }
+//        else if (openInSystem_RadioButton.isSelected())
+//        {
+//            ProcessBuilder processBuilder = new ProcessBuilder(filePath.toAbsolutePath().toString());
+//            try
+//            {
+//                Process process = processBuilder.start();
+//            }
+//            catch (IOException ioException)
+//            {
+//                ioException.printStackTrace();
+//            }
+//        }
 
         stage.hide();
     }
@@ -195,19 +229,9 @@ public class OpenWithCustomProgramDialog
 
     private void useCustomCommandCheckBox_Action(ActionEvent event)
     {
-        if (customCommand_CheckBox.isSelected())
-        {
-            programName_TextField.setDisable(true);
-            command_TextField.setVisible(true);
-            chooseProgram_Button.setDisable(true);
-        }
-        else
-        {
-            programName_TextField.setDisable(false);
-            chooseProgram_Button.setDisable(false);
-            command_TextField.setVisible(false);
-
-        }
+        programName_VBox.setVisible(false);
+        command_TextField.setVisible(true);
+        execute_Button.setDisable(false);
     }
 
     private void nameProgramChanged_Listener(ObservableValue<? extends String> event, String oldValue, String newValue)
@@ -230,6 +254,28 @@ public class OpenWithCustomProgramDialog
             {
                 execute_Button.setDisable(false);
             }
+        }
+    }
+
+    private void programNameRadioButton_Action(ActionEvent event)
+    {
+        command_TextField.setVisible(false);
+        programName_VBox.setVisible(true);
+    }
+
+    private void openInSystemRadioButton_Action(ActionEvent event)
+    {
+        programName_VBox.setVisible(false);
+        //command_TextField.setVisible(true);
+        execute_Button.setDisable(false);
+        command_TextField.setVisible(false);
+    }
+
+    private void scene_KeyPressed(KeyEvent event)
+    {
+        if (event.getCode() == KeyCode.ESCAPE)
+        {
+            stage.hide();
         }
     }
 

@@ -1,5 +1,9 @@
 package org.yaldysse.fm.dialogs.copy;
 
+import javafx.animation.Animation;
+import javafx.animation.KeyFrame;
+import javafx.animation.KeyValue;
+import javafx.animation.Timeline;
 import javafx.event.ActionEvent;
 import javafx.geometry.Insets;
 import javafx.geometry.Orientation;
@@ -21,6 +25,7 @@ import org.yaldysse.fm.dialogs.ConfirmDialogButtonType;
 import org.yaldysse.fm.dialogs.ConfirmOperationDialog;
 import org.yaldysse.fm.dialogs.FilesNumberAndSizeCalculator;
 import org.yaldysse.fm.dialogs.SimpleFileSizeAndNumberCounter;
+import org.yaldysse.fm.dialogs.delete.DeleteFiles;
 import org.yaldysse.fm.dialogs.delete.DeleteOperationResult;
 import org.yaldysse.tools.StorageCapacity;
 
@@ -28,6 +33,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.text.NumberFormat;
+import java.time.Duration;
 
 public class CopyFilesDialog implements CopyOperationProgress, FilesNumberAndSizeCalculator
 {
@@ -52,6 +58,8 @@ public class CopyFilesDialog implements CopyOperationProgress, FilesNumberAndSiz
     private Label progressFilesValue_Label;
     private Label speed_Label;
     private Label speedValue_Label;
+    private Label leftTime_Label;
+    private Label leftTimeValue_Label;
     private ProgressBar progressBar;
     private ProgressIndicator progressIndicator;
     private GridPane operationInfo_GridPane;
@@ -89,13 +97,28 @@ public class CopyFilesDialog implements CopyOperationProgress, FilesNumberAndSiz
     private Label sourceFilePathValue_Label;
     private Label destinationFilePath_Label;
     private Label destinationFilePathValue_Label;
+    private Label spendTime_Label;
+    private Label spendTimeValue_Label;
+    private int spendTimeInSecond;
+    private Timeline spendTime_Timeline;
+    private boolean deleteFiles;
 
-    public CopyFilesDialog(final Path aSourcePath, final Path aDestinationPath)
+    /**
+     * Хранит количество секунд, через которое нужно пересчитывать время.
+     */
+    private int averageLeftTimeCounter = 0;
+    private long averageCopiedBytes = 0;
+
+
+    public CopyFilesDialog(final Path aSourcePath, final Path aDestinationPath,
+                           final boolean deleteSourceFiles)
     {
         initializeComponents();
         filesNumber = 0;
         totalSize = 0;
         copiedFiles = 0;
+        deleteFiles = deleteSourceFiles;
+        spendTimeInSecond = 0;
         paths = new Path[1];
         paths[0] = aSourcePath;
         destinationPaths = new Path[1];
@@ -111,8 +134,10 @@ public class CopyFilesDialog implements CopyOperationProgress, FilesNumberAndSiz
     {
         initializeComponents();
         filesNumber = 0;
+        deleteFiles = false;
         totalSize = 0;
         copiedFiles = 0;
+        spendTimeInSecond = 0;
         fm_gui = aFmGui;
 
         initializeConfirmDialogComponents();
@@ -125,6 +150,8 @@ public class CopyFilesDialog implements CopyOperationProgress, FilesNumberAndSiz
         filesNumber = 0;
         totalSize = 0;
         copiedFiles = 0;
+        deleteFiles = true;
+        spendTimeInSecond = 0;
         paths = aSourcePaths;
         destinationPaths = aDestinationPaths;
         fm_gui = aFmGui;
@@ -189,6 +216,16 @@ public class CopyFilesDialog implements CopyOperationProgress, FilesNumberAndSiz
         progressFiles_Label.setFont(Font.font(Font.getDefault().getName(), FontWeight.BOLD, 14.0D));
         progressFilesValue_Label = new Label("?");
 
+        leftTime_Label = new Label("Time left:");
+        leftTime_Label.setFont(Font.font(Font.getDefault().getName(), FontWeight.BOLD, 14.0D));
+
+        leftTimeValue_Label = new Label("");
+
+        spendTime_Label = new Label("Spend time:");
+        spendTime_Label.setFont(Font.font(Font.getDefault().getName(), FontWeight.BOLD, 14.0D));
+
+        spendTimeValue_Label = new Label("");
+
         progressBar = new ProgressBar(0.0D);
         progressBar.setPrefWidth(Region.USE_COMPUTED_SIZE);
 
@@ -216,6 +253,12 @@ public class CopyFilesDialog implements CopyOperationProgress, FilesNumberAndSiz
                 copiedBytesValue_Label);
         //operationInfo_GridPane.addRow(operationInfo_GridPane.getRowCount(), speedValue_Label);
         operationInfo_GridPane.addRow(operationInfo_GridPane.getRowCount(), progressIndicator);
+
+        Separator firstSeparator = new Separator(Orientation.HORIZONTAL);
+
+        operationInfo_GridPane.add(firstSeparator, 0, operationInfo_GridPane.getRowCount(), 2, 1);
+        operationInfo_GridPane.addRow(operationInfo_GridPane.getRowCount(), leftTime_Label, leftTimeValue_Label);
+        operationInfo_GridPane.addRow(operationInfo_GridPane.getRowCount(), spendTime_Label, spendTimeValue_Label);
 
 
         progress_HBox = new HBox(progressBar);
@@ -282,9 +325,18 @@ public class CopyFilesDialog implements CopyOperationProgress, FilesNumberAndSiz
     public void show()
     {
         stage.show();
-        copyFilesRunnable = new CopyFiles(paths, destinationPaths, this);
+        copyFilesRunnable = new CopyFiles(paths, destinationPaths, this,
+                deleteFiles);
         copyFiles_Thread = new Thread(copyFilesRunnable,
                 "Copying files");
+        spendTime_Timeline = new Timeline(new KeyFrame(javafx.util.Duration.seconds(1), event ->
+        {
+            spendTimeInSecond++;
+            Duration temporaryDuration = Duration.ofSeconds(spendTimeInSecond);
+            spendTimeValue_Label.setText(temporaryDuration.toHoursPart() + " h "
+                    + temporaryDuration.toMinutesPart() + " m " + temporaryDuration.toSecondsPart() + " s");
+        }));
+        spendTime_Timeline.setCycleCount(Animation.INDEFINITE);
 
         try
         {
@@ -300,6 +352,7 @@ public class CopyFilesDialog implements CopyOperationProgress, FilesNumberAndSiz
             interruptedException.printStackTrace();
         }
         copyFiles_Thread.start();
+        spendTime_Timeline.play();
     }
 
 
@@ -307,8 +360,8 @@ public class CopyFilesDialog implements CopyOperationProgress, FilesNumberAndSiz
      * Предназначен для вызова из потока копирования.
      */
     @Override
-    public void appearOperationProgress(boolean completed, final boolean interrupted
-            , int copiedFilesNumber, final int finishedFilesNumber, long copiedBytes,
+    public void appearOperationProgress(boolean completed, final boolean interrupted,
+                                        int copiedFilesNumber, final int finishedFilesNumber, long copiedBytes,
                                         final long copiedBytesPortion, final Path processedFilePath)
     {
         progressFilesValue_Label.setText("" + finishedFilesNumber + " of " + filesNumber);
@@ -317,6 +370,34 @@ public class CopyFilesDialog implements CopyOperationProgress, FilesNumberAndSiz
         //System.out.println("Порция: " + copiedBytesPortion);
         speedValue_Label.setText(StorageCapacity.ofBytes(copiedBytesPortion).toString());
         fileNameValue_Label.setText(processedFilePath.getFileName().toString());
+
+        averageLeftTimeCounter++;
+        averageCopiedBytes += copiedBytesPortion;
+
+        /*Стабилизировать показатель времени было решено так: каждые три
+         * единицы времени находить среднее значение скопированных байт и делить
+         * на среднее значение скорости копирования.
+         *  */
+        if (averageLeftTimeCounter >= 3)
+        {
+            long leftSize = totalSize - copiedBytes;
+            averageCopiedBytes /= 3;//средняя скорость копирования за три единицы времени
+
+            if (averageCopiedBytes != 0)
+            {
+                int leftTimeInSecond = (int) (leftSize / averageCopiedBytes);
+                Duration leftTime = Duration.ofSeconds(leftTimeInSecond);
+                leftTimeValue_Label.setText("" + leftTime.toHoursPart() + " h " + leftTime.toMinutesPart()
+                        + " m " + leftTime.toSecondsPart() + " s ");
+            }
+            else
+            {
+                leftTimeValue_Label.setText("---");
+            }
+
+            averageLeftTimeCounter = 0;
+            averageCopiedBytes = 0;
+        }
 
         double progressPercent = (((double) copiedBytes * 100.0D) / (double) totalSize) / 100.0D;
         //System.out.println("Percent: " + progressPercent);
@@ -335,8 +416,24 @@ public class CopyFilesDialog implements CopyOperationProgress, FilesNumberAndSiz
                 stopOperation_Button.setDisable(true);
                 ok_Button.setDisable(false);
                 fileNameValue_Label.setText("Copying files have been completed.");
+
+                if (copiedFilesNumber == filesNumber)
+                {
+                    for (Path temporaryPath : paths)
+                    {
+                        try
+                        {
+                            DeleteFiles.deleteFileRecursively(temporaryPath);
+                        }
+                        catch (IOException ioException)
+                        {
+                            ioException.printStackTrace();
+                        }
+                    }
+                }
             }
             fm_gui.updateFilesListAfterCopying(destinationPaths);
+            spendTime_Timeline.stop();
         }
     }
 
@@ -546,5 +643,13 @@ public class CopyFilesDialog implements CopyOperationProgress, FilesNumberAndSiz
 
     }
 
+
+    /**
+     * Позволяет указать, удалять ли исходные файлы после их копирования или нет.
+     */
+    public void setMoveOperation(final boolean value)
+    {
+        deleteFiles = value;
+    }
 
 }

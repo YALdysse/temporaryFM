@@ -1,6 +1,7 @@
 package org.yaldysse.fm.dialogs.delete;
 
 import javafx.application.Platform;
+
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -8,11 +9,13 @@ import java.nio.file.LinkOption;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 
-/**Класс, описывающие роботу потока по удалению заданных файлов. Перед завершением
- * работы потока вызывается метод {@link org.yaldysse.fm.dialogs.delete.DeleteProgress#appearDeleteProgress(int,Path, boolean, boolean)},
+/**
+ * Класс, описывающие роботу потока по удалению заданных файлов. Перед завершением
+ * работы потока вызывается метод {@link org.yaldysse.fm.dialogs.delete.DeleteProgress#appearDeleteProgress(int, Path, boolean, boolean)},
  * для указанного обьекта класса, что реализовывает интерфейс {@link org.yaldysse.fm.dialogs.delete.DeleteProgress}.
  * Таким образом поток передает данные об состоянии операции классу, что реализовывает
- * этот интерфейс.*/
+ * этот интерфейс.
+ */
 public class DeleteFiles implements Runnable
 {
     private Path[] paths;
@@ -48,7 +51,7 @@ public class DeleteFiles implements Runnable
         notifyAboutCurrentProgress(true, false);
     }
 
-    private void walkPathsThroughListMethod(final File targetFile) throws InterruptedException
+    public void walkPathsThroughListMethod(final File targetFile) throws InterruptedException
     {
         if (!Files.isSymbolicLink(targetFile.toPath()))
         {
@@ -131,5 +134,41 @@ public class DeleteFiles implements Runnable
     public void setInterrupt(final boolean value)
     {
         interrupt = value;
+    }
+
+
+    /**
+     * Позволяет удалить файл. Также удаляет каталоги с файлами и символические
+     * ссылки не переходя по ним.
+     *
+     * @throws IOException В случае возникновения ошибки ввода-вывода.
+     */
+    public static void deleteFileRecursively(final Path targetPath) throws IOException
+    {
+        if (!Files.isSymbolicLink(targetPath))
+        {
+            //Переходит по символическим ссылкам
+            String[] dirList = targetPath.toFile().list();
+            Path temporaryPath = null;
+
+            if (dirList != null)
+            {
+                for (int k = 0; k < dirList.length; k++)
+                {
+                    temporaryPath = targetPath.resolve(dirList[k]);
+
+                    if (Files.isDirectory(temporaryPath, LinkOption.NOFOLLOW_LINKS))
+                    {
+                        deleteFileRecursively(temporaryPath);
+                    }
+                    else
+                    {
+                        Files.delete(targetPath);
+                    }
+                }
+            }
+        }
+        Files.delete(targetPath);
+
     }
 }

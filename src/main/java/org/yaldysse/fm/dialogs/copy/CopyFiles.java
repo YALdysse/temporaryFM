@@ -2,14 +2,17 @@ package org.yaldysse.fm.dialogs.copy;
 
 import javafx.application.Platform;
 import org.yaldysse.fm.dialogs.ConfirmDialogButtonType;
+
 import java.io.*;
 import java.nio.file.*;
 import java.util.Timer;
 import java.util.TimerTask;
 
-/**Поток выполнения, предназначен для копирования файлов. Взаимодействует
+/**
+ * Поток выполнения, предназначен для копирования файлов. Взаимодействует
  * с диалоговым окном копирования посредством вызова методов, что предоставлены
- * интерфейсом {@link org.yaldysse.fm.dialogs.copy.CopyOperationProgress}.*/
+ * интерфейсом {@link org.yaldysse.fm.dialogs.copy.CopyOperationProgress}.
+ */
 public class CopyFiles implements Runnable
 {
     private final Path[] sourcePaths;
@@ -28,13 +31,14 @@ public class CopyFiles implements Runnable
     private boolean interrupt;
     private ConfirmDialogButtonType currentCopyOption;
     public final Object forLock = new Object();
-    private final Timer timer;
+    private Timer timer;
     private TimerTask timerTask;
-    public final int timerDelay = 0;
+    public final int timerDelay = 1;
     public final int timerPeriod = 1000;
+    private boolean removeFilesAfterCopy;
 
     public CopyFiles(final Path[] targetPaths, final Path[] aDestinationPaths,
-                     CopyOperationProgress aCopyProgress)
+                     CopyOperationProgress aCopyProgress, final boolean removeFiles)
     {
         sourcePaths = targetPaths;
         destinationPaths = aDestinationPaths;
@@ -44,6 +48,7 @@ public class CopyFiles implements Runnable
         copyOperationProgress = aCopyProgress;
         interrupt = false;
         currentCopyOption = ConfirmDialogButtonType.ASK_ME;
+        removeFilesAfterCopy = removeFiles;
         //forLock = new Object();
         timerTask = new TimerTask()
         {
@@ -82,7 +87,7 @@ public class CopyFiles implements Runnable
 
     private void walkFilesAndCopy(final File sourceFile, final File destinationFile) throws InterruptedException
     {
-        currentFilePath=sourceFile.toPath();
+        currentFilePath = sourceFile.toPath();
         System.out.println("Обработка файла: " + sourceFile.getAbsolutePath());
         if (interrupt)
         {
@@ -106,6 +111,7 @@ public class CopyFiles implements Runnable
                 if (currentCopyOption == ConfirmDialogButtonType.ASK_ME)
                 {
                     timer.cancel();
+                    timer.purge();
                     Platform.runLater(() -> copyOperationProgress.fileAlreadyExists(
                             sourceFile.toPath(), destinationFile.toPath()));
 
@@ -117,6 +123,16 @@ public class CopyFiles implements Runnable
                     {
                         forLock.wait();
                     }
+
+                    timerTask = new TimerTask()
+                    {
+                        @Override
+                        public void run()
+                        {
+                            notifyAboutCurrentProgress(false, false);
+                        }
+                    };
+                    timer = new Timer();
                     timer.schedule(timerTask, timerDelay, timerPeriod);
                     System.out.println("Получено действие: " + currentCopyOption.name());
                     System.out.println("Выходим из режима ожидания");
@@ -148,6 +164,11 @@ public class CopyFiles implements Runnable
                             LinkOption.NOFOLLOW_LINKS);
                 }
 
+                if (removeFilesAfterCopy)
+                {
+                    Files.delete(sourceFile.toPath());
+                }
+
                 copiedFilesNumber++;
                 long temporaryBytes = Files.size(destinationFile.toPath());
                 copiedBytes += temporaryBytes;
@@ -164,6 +185,11 @@ public class CopyFiles implements Runnable
                 }
 
                 copyFileUsingIOStream(sourceFile, destinationFile);
+
+                if (removeFilesAfterCopy)
+                {
+                    Files.delete(sourceFile.toPath());
+                }
                 return;
             }
             else
@@ -215,7 +241,7 @@ public class CopyFiles implements Runnable
             while ((readBytes = bufferedInputStream.readNBytes(4096)
             ) != null)
             {
-                if(interrupt)
+                if (interrupt)
                 {
                     bufferedOutputStream.close();
                     bufferedInputStream.close();
@@ -253,7 +279,7 @@ public class CopyFiles implements Runnable
         copiedBytesPortion_backup = copiedBytesPortion;
         Platform.runLater(() ->
                 copyOperationProgress.appearOperationProgress(completed, interrupted, copiedFilesNumber,
-                        finishedFilesNumber, copiedBytes, copiedBytesPortion_backup,currentFilePath));
+                        finishedFilesNumber, copiedBytes, copiedBytesPortion_backup, currentFilePath));
         copiedBytesPortion = 0;
     }
 
