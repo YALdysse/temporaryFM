@@ -2,7 +2,6 @@ package org.yaldysse.fm.dialogs.copy;
 
 import javafx.animation.Animation;
 import javafx.animation.KeyFrame;
-import javafx.animation.KeyValue;
 import javafx.animation.Timeline;
 import javafx.event.ActionEvent;
 import javafx.geometry.Insets;
@@ -34,6 +33,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.text.NumberFormat;
 import java.time.Duration;
+import java.util.Properties;
 
 public class CopyFilesDialog implements CopyOperationProgress, FilesNumberAndSizeCalculator
 {
@@ -102,6 +102,7 @@ public class CopyFilesDialog implements CopyOperationProgress, FilesNumberAndSiz
     private int spendTimeInSecond;
     private Timeline spendTime_Timeline;
     private boolean deleteFiles;
+    private Properties language;
 
     /**
      * Хранит количество секунд, через которое нужно пересчитывать время.
@@ -111,8 +112,9 @@ public class CopyFilesDialog implements CopyOperationProgress, FilesNumberAndSiz
 
 
     public CopyFilesDialog(final Path aSourcePath, final Path aDestinationPath,
-                           final boolean deleteSourceFiles)
+                           final boolean deleteSourceFiles, final Properties newLanguageProperties)
     {
+        language = newLanguageProperties;
         initializeComponents();
         filesNumber = 0;
         totalSize = 0;
@@ -130,8 +132,9 @@ public class CopyFilesDialog implements CopyOperationProgress, FilesNumberAndSiz
     /**
      * В таком случае в обязательном порядке воспользоваться методом {@link #setPathsToCopy(Path[], Path[])}}
      */
-    public CopyFilesDialog(FM_GUI aFmGui)
+    public CopyFilesDialog(FM_GUI aFmGui, final Properties newLanguageProperties)
     {
+        language = newLanguageProperties;
         initializeComponents();
         filesNumber = 0;
         deleteFiles = false;
@@ -144,13 +147,14 @@ public class CopyFilesDialog implements CopyOperationProgress, FilesNumberAndSiz
     }
 
     public CopyFilesDialog(final Path[] aSourcePaths, final Path[] aDestinationPaths,
-                           FM_GUI aFmGui)
+                           FM_GUI aFmGui, final Properties newLanguageProperties)
     {
+        language = newLanguageProperties;
         initializeComponents();
         filesNumber = 0;
         totalSize = 0;
         copiedFiles = 0;
-        deleteFiles = true;
+        deleteFiles = false;
         spendTimeInSecond = 0;
         paths = aSourcePaths;
         destinationPaths = aDestinationPaths;
@@ -167,7 +171,8 @@ public class CopyFilesDialog implements CopyOperationProgress, FilesNumberAndSiz
                 CornerRadii.EMPTY, BorderStroke.MEDIUM, new Insets(rem * 0.4D))));
         root.setPadding(new Insets(rem * 0.8D));
 
-        Label title_Label = new Label("Copying");
+        Label title_Label = new Label(language.getProperty("copying_title",
+                "Copying"));
         title_Label.setFont(Font.font(title_Label.getFont().getName(),
                 FontWeight.EXTRA_BOLD, 18.0D));
         //header_Label.setPadding(new Insets(0.0D, rem * 0.4D, 0.0D, 0.4D));
@@ -180,49 +185,59 @@ public class CopyFilesDialog implements CopyOperationProgress, FilesNumberAndSiz
         title_HBox.setAlignment(Pos.CENTER);
         HBox.setHgrow(title_HBox, Priority.ALWAYS);
 
-        fileName_Label = new Label("Name of file:");
+        fileName_Label = new Label(language.getProperty("copyiyng_title",
+                "Name of file:"));
 
         fileNameValue_Label = new Label("?");
         fileNameValue_Label.setFont(Font.font(Font.getDefault().getName(), FontWeight.BOLD, 11.0D));
 
-        totalFilesNumber_Label = new Label("Total files:");
+        totalFilesNumber_Label = new Label(language.getProperty("totalFilesNumber_label",
+                "Total files:"));
         totalFilesNumberValue_Label = new Label("?");
 
-        totalSize_Label = new Label("Total size:");
-        totalSize_Label.setFont(Font.font(Font.getDefault().getName(), FontWeight.BOLD, 14.0D));
+        totalSize_Label = new Label(language.getProperty("totalSize_label",
+                "Total size:"));
+        totalSize_Label.setFont(Font.font(Font.getDefault().getName(), FontWeight.BOLD, 13.0D));
         totalSizeValue_Label = new Label("?");
 
-        copiedBytes_Label = new Label("Copied bytes:");
-        copiedBytes_Label.setFont(Font.font(Font.getDefault().getName(), FontWeight.BOLD, 14.0D));
+        copiedBytes_Label = new Label(language.getProperty("copiedBytes_label",
+                "Copied bytes:"));
+        copiedBytes_Label.setFont(Font.font(Font.getDefault().getName(), FontWeight.BOLD, 13.0D));
         copiedBytesValue_Label = new Label("? of ?");
 
-        totalSizeBytes_Label = new Label("Total size (bytes):");
-        totalSizeBytes_Label.setFont(Font.font(Font.getDefault().getName(), FontWeight.BOLD, 14.0D));
+        totalSizeBytes_Label = new Label(language.getProperty("totalSizeBytes_label",
+                "Total size (bytes):"));
+        totalSizeBytes_Label.setFont(Font.font(Font.getDefault().getName(), FontWeight.BOLD, 13.0D));
         totalSizeBytesValue_Label = new Label("?");
 
-        copiedSize_Label = new Label("Copied size:");
-        copiedSize_Label.setFont(Font.font(Font.getDefault().getName(), FontWeight.BOLD, 14.0D));
+        copiedSize_Label = new Label(language.getProperty("copiedSize_label",
+                "Copied size:"));
+        copiedSize_Label.setFont(Font.font(Font.getDefault().getName(), FontWeight.BOLD, 13.0D));
 
         copiedSizeValue_Label = new Label();
 
-        speed_Label = new Label("Speed:");
-        speed_Label.setFont(Font.font(Font.getDefault().getName(), FontWeight.BOLD, 14.0D));
+        speed_Label = new Label(language.getProperty("speed_label",
+                "Speed:"));
+        speed_Label.setFont(Font.font(Font.getDefault().getName(), FontWeight.BOLD, 13.0D));
 
         speedValue_Label = new Label();
         speedValue_Label.setFont(Font.font(Font.getDefault().getName(), FontWeight.BOLD, 11.0D));
 
 
-        progressFiles_Label = new Label("Progress:");
-        progressFiles_Label.setFont(Font.font(Font.getDefault().getName(), FontWeight.BOLD, 14.0D));
+        progressFiles_Label = new Label(language.getProperty("progressFiles_label",
+                "Progress:"));
+        progressFiles_Label.setFont(Font.font(Font.getDefault().getName(), FontWeight.BOLD, 13.0D));
         progressFilesValue_Label = new Label("?");
 
-        leftTime_Label = new Label("Time left:");
-        leftTime_Label.setFont(Font.font(Font.getDefault().getName(), FontWeight.BOLD, 14.0D));
+        leftTime_Label = new Label(language.getProperty("leftTime_label",
+                "Time left:"));
+        leftTime_Label.setFont(Font.font(Font.getDefault().getName(), FontWeight.BOLD, 13.0D));
 
         leftTimeValue_Label = new Label("");
 
-        spendTime_Label = new Label("Spend time:");
-        spendTime_Label.setFont(Font.font(Font.getDefault().getName(), FontWeight.BOLD, 14.0D));
+        spendTime_Label = new Label(language.getProperty("spendTime_label",
+                "Spend time:"));
+        spendTime_Label.setFont(Font.font(Font.getDefault().getName(), FontWeight.BOLD, 13.0D));
 
         spendTimeValue_Label = new Label("");
 
@@ -273,7 +288,8 @@ public class CopyFilesDialog implements CopyOperationProgress, FilesNumberAndSiz
 
         progressBar.prefWidthProperty().bind(progress_HBox.widthProperty());
 
-        stopOperation_Button = new Button("Cancel");
+        stopOperation_Button = new Button(language.getProperty("stopOperation_button",
+                "Cancel"));
         stopOperation_Button.setOnAction(this::stopOperation_ButtonAction);
 
         ok_Button = new Button("OK");
@@ -409,15 +425,17 @@ public class CopyFilesDialog implements CopyOperationProgress, FilesNumberAndSiz
             {
                 stopOperation_Button.setDisable(true);
                 ok_Button.setDisable(false);
-                fileNameValue_Label.setText("Copying files have been stopped.");
+                fileNameValue_Label.setText(language.getProperty("copyingFilesHaveBeenStopped_str",
+                        "Copying files have been stopped."));
             }
             else
             {
                 stopOperation_Button.setDisable(true);
                 ok_Button.setDisable(false);
-                fileNameValue_Label.setText("Copying files have been completed.");
+                fileNameValue_Label.setText(language.getProperty("copyingFilesHaveBeenCompleted_str",
+                        "Copying files have been completed."));
 
-                if (copiedFilesNumber == filesNumber)
+                if (deleteFiles && copiedFilesNumber == filesNumber)
                 {
                     for (Path temporaryPath : paths)
                     {
@@ -432,7 +450,7 @@ public class CopyFilesDialog implements CopyOperationProgress, FilesNumberAndSiz
                     }
                 }
             }
-            fm_gui.updateFilesListAfterCopying(destinationPaths);
+            //fm_gui.updateFilesListAfterCopying(destinationPaths);
             spendTime_Timeline.stop();
         }
     }
@@ -482,15 +500,16 @@ public class CopyFilesDialog implements CopyOperationProgress, FilesNumberAndSiz
 
     /**
      * Позволяет задать файлы, над которыми нужно будет применить операцию. Автоматически
-     * запрашивает пересчет количества файлов и размер.
-     *
-     * @see
+     * запрашивает пересчет количества файлов и размер. Сбрасывает метку на удаление.
      */
     public void setPathToCopy(final Path aSourcePath, final Path aDestinationPaths)
     {
         paths = null;
         paths = new Path[1];
         paths[0] = aSourcePath;
+        ok_Button.setDisable(true);
+        stopOperation_Button.setDisable(false);
+        deleteFiles = false;
 
         destinationPaths = null;
         destinationPaths = new Path[1];
@@ -506,12 +525,16 @@ public class CopyFilesDialog implements CopyOperationProgress, FilesNumberAndSiz
     /**
      * Позволяет задать файлы, над которыми нужно будет применить операцию.
      * Автоматически запрашивает пересчет размера и количества файлов.
+     * Сбрасывает метку на удаление.
      */
     public void setPathsToCopy(final Path[] aSourcePaths, final Path[] aDestinationPaths)
     {
         paths = null;
         paths = aSourcePaths;
         destinationPaths = aDestinationPaths;
+        ok_Button.setDisable(true);
+        stopOperation_Button.setDisable(false);
+        deleteFiles = false;
 
         updateInfo();
         createAndStartThread();

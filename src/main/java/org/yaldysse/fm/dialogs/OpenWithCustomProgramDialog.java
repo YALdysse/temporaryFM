@@ -17,11 +17,10 @@ import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
 import org.yaldysse.fm.FM_GUI;
-import org.yaldysse.fm.dialogs.delete.DeleteFiles;
-
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.Properties;
 
 public class OpenWithCustomProgramDialog
 {
@@ -37,26 +36,24 @@ public class OpenWithCustomProgramDialog
     private Button chooseProgram_Button;
     private Button execute_Button;
     private RadioButton customCommand_RadioButton;
-    private RadioButton openInSystem_RadioButton;
+    //private RadioButton openInSystem_RadioButton;
     private RadioButton programName_RadioButton;
     private VBox programName_VBox;
 
     private BorderPane buttons_BorderPane;
     private Path filePath;
-    private Thread calculateFilesNumberAndTotalSize_Thread;
     private ConfirmOperationDialog confirmOperationDialog;
     private Stage stage;
-    private Thread deleteFiles_Thread;
-    private DeleteFiles deleteFilesRunnable;
-
+    private Properties language;
     private FM_GUI fm_gui;
     private File pathToProgram;
 
 
-    public OpenWithCustomProgramDialog(final Path pathToFile)
+    public OpenWithCustomProgramDialog(final Path pathToFile,
+                                       final Properties newLanguageProperties)
     {
         filePath = pathToFile;
-
+        language = newLanguageProperties;
         initializeComponents();
     }
 
@@ -67,13 +64,15 @@ public class OpenWithCustomProgramDialog
                 CornerRadii.EMPTY, BorderStroke.MEDIUM, new Insets(rem * 0.4D))));
         root.setPadding(new Insets(rem * 0.8D));
 
-        programName_Label = new Label("Name of program");
+        programName_Label = new Label(language.getProperty(
+                "programName_label","Name of program"));
         programName_Label.setFont(Font.font(Font.getDefault().getName(),
                 FontWeight.NORMAL, 10.0D));
 
 
         programName_TextField = new TextField();
-        programName_TextField.setPromptText("Enter name of program here");
+        programName_TextField.setPromptText(language.getProperty(
+                "enterNameProgramHere_str","Enter name of program here"));
         programName_TextField.textProperty().addListener((event, oldValue, newValue) ->
         {
             nameProgramChanged_Listener(event, oldValue, newValue);
@@ -93,26 +92,31 @@ public class OpenWithCustomProgramDialog
         programName_VBox = new VBox(programName_Label, programNameAndChooser_HBox);
         programName_VBox.setVisible(false);
 
-        targetFile_Label = new Label("Open file '" + filePath.getFileName() + "' with program:");
+        targetFile_Label = new Label(language.getProperty("openFile_str","Open file")
+                + " '" + filePath.getFileName() + "' " +
+            language.getProperty("withProgram_str","with program:"));
         targetFile_Label.setWrapText(true);
 
         command_TextField = new TextField();
-        command_TextField.setPromptText("Enter command to execute here");
+        command_TextField.setPromptText(language.getProperty("enterCommandToExecuteHere_str",
+                "Enter command to execute here"));
         command_TextField.setVisible(false);
 
         ToggleGroup radioToggleGroup = new ToggleGroup();
 
 
-        customCommand_RadioButton = new RadioButton("Use custom command");
+        customCommand_RadioButton = new RadioButton(language.getProperty(
+                "useCustomCommand_radioButton","Use custom command"));
         customCommand_RadioButton.setOnAction(this::useCustomCommandCheckBox_Action);
         customCommand_RadioButton.setToggleGroup(radioToggleGroup);
 
-        openInSystem_RadioButton = new RadioButton("System");
-        openInSystem_RadioButton.setToggleGroup(radioToggleGroup);
-        openInSystem_RadioButton.setSelected(true);
-        openInSystem_RadioButton.setOnAction(this::openInSystemRadioButton_Action);
+//        openInSystem_RadioButton = new RadioButton("System");
+//        openInSystem_RadioButton.setToggleGroup(radioToggleGroup);
+//        openInSystem_RadioButton.setSelected(true);
+//        openInSystem_RadioButton.setOnAction(this::openInSystemRadioButton_Action);
 
-        programName_RadioButton = new RadioButton("Use name of program");
+        programName_RadioButton = new RadioButton(language.getProperty(
+                "useProgramName_radioButton","Use name of program"));
         programName_RadioButton.setOnAction(this::programNameRadioButton_Action);
         programName_RadioButton.setToggleGroup(radioToggleGroup);
 
@@ -120,7 +124,8 @@ public class OpenWithCustomProgramDialog
                 command_TextField);
         customCommand_VBox.setPadding(new Insets(rem * 1.15D, 0.0D, 0.0D, 0.0D));
 
-        execute_Button = new Button("Execute");
+        execute_Button = new Button(language.getProperty(
+                "execute_button","Execute"));
         execute_Button.setDisable(true);
         execute_Button.setOnAction(this::executeButton_Action);
 
@@ -158,7 +163,7 @@ public class OpenWithCustomProgramDialog
     private void chooseProgramButton_Action(ActionEvent event)
     {
         FileChooser fileChooser = new FileChooser();
-        fileChooser.setTitle("Select program");
+        fileChooser.setTitle(language.getProperty("selectProgram_windowTitle","Select program"));
         fileChooser.setInitialDirectory(filePath.getParent().toFile());
         pathToProgram = fileChooser.showOpenDialog(null);
 

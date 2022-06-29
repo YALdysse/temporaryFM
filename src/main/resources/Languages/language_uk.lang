@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE properties SYSTEM "http://java.sun.com/dtd/properties.dtd">
+<properties>
+<entry key="#language_icon_path">/Images/Languages/uk.png</entry>
+<!-- -->
+<entry key="nameOfFileHasBeenSuccessfullyCopied_str">Назва файлу скопійована.</entry>
+<entry key="selectedItems_str">Обрано:</entry>
+<!--File-->
+<entry key="file_menu">Головне</entry>
+<entry key="createNewTab_menuItem">Створити нову вкладку</entry>
+<entry key="openInNewTab_menuItem">Відкрити в новій вкладкі</entry>
+<entry key="copyFileName_menuItem">Копіювати ім'я файлу</entry>
+<entry key="copyAbsolutePath_meuItem">Копіювати повний шлях до файлу</entry>
+<entry key="favorites_menuItem">Уподобання</entry>
+<entry key="openTerminalHere_menuItem">Відкрити термінал</entry>
+<entry key="language_menu">Мова</entry>
+<entry key="exit_menuItem">Вийти</entry>
+<!--Edit-->
+<entry key="edit_menu">Редагування</entry>
+<entry key="attributes_menuItem">Атрибути</entry>
+<entry key="createFile_menuItem">Створити файл</entry>
+<entry key="createDirectory_menuItem">Створити каталог</entry>
+<entry key="createSymbolicLink_menuItem">Створити символічне посилання</entry>
+<entry key="copy_menuItem">Копіювати</entry>
+<entry key="move_menuItem">Вирізати</entry>
+<entry key="paste_menuItem">Вставити</entry>
+<entry key="rename_menuItem">Змінити назву</entry>
+<entry key="delete_menuItem">Видалити</entry>
+<entry key="deleteFile">Видалити файл</entry>
+<!--Go to-->
+<entry key="goTo_menu">Перейти до...</entry>
+<entry key="goToRootDirectories_menuItem">Списку розділів</entry>
+<entry key="goToHomeDirectory_menuItem">Домашнього каталогу</entry>
+<entry key="goToUserDirectory_MenuItem">Робочого каталогу</entry>
+<entry key="goToParent_menuItem">Батьківського каталогу</entry>
+<entry key="goToPreviousTab_menuItem">Попередньої вкладки</entry>
+<entry key="goToNextTab_menuItem">Наступної вкладки</entry>
+<!--Sort by-->
+<entry key="sortBy_menu">Сортувати...</entry>
+<entry key="sortByName_menuItem">Ім'я</entry>
+<entry key="sortBySize_menuItem">Розмір</entry>
+<entry key="sortByOwner_menuItem">Власник</entry>
+<entry key="sortByType_menuItem">Тип</entry>
+<entry key="sortByCreationTime_menuItem">Дата створення</entry>
+<entry key="sortByLastModifiedTime_menuItem">Дата останнього редагування</entry>
+<entry key="ascending_menuItem">За зростанням</entry>
+<entry key="descending_menuItem">За спаданням</entry>
+<entry key="directoriesFirst_menuItem">Спочатку каталоги</entry>
+<entry key="name_column">Ім'я</entry>
+<entry key="type_column">Тип</entry>
+<entry key="size_column">Розмір</entry>
+<!--Files context menu-->
+<entry key="open_contextMenuForFilesItem">Відкрити</entry>
+<entry key="openInSystem_contextMenuForFilesItem">Система</entry>
+<entry key="openWith_MenuContext">Відкрити за допомогою</entry>
+<entry key="openInCustomProgram_contextMenuForFilesItem">Обрати програму...</entry>
+<entry key="addToFavorites_contextMenuForFilesItem">Додати до уподобань</entry>
+<!--FileAttributeEditro-->
+<entry key="infoAboutFile_tab">Інфо</entry>
+<entry key="editAttributes_tab">Редагування</entry>
+<entry key="ownerAttribute_label">Власник:</entry>
+<entry key="groupAttribute_label">Група:</entry>
+<entry key="sizeBytesAttribute_label">Розмір (байт):</entry>
+<entry key="filesNumberInside_label">Файлів:</entry>
+<entry key="creationTimeAttribute_label">Створено:</entry>
+<entry key="lastModifiedTimeAttribute_label">Змінено:</entry>
+<entry key="permissions_label">Права</entry>
+<entry key="ownerPermissionsBlock_Label">Власник:</entry>
+<entry key="groupPermissionsBlock_Label">Група:</entry>
+<entry key="otherPermissionsBlock_Label">Інші:</entry>
+<entry key="apply_button">Застосувати</entry>
+<entry key="date_label">Дата</entry>
+<entry key="time_label">Час</entry>
+<entry key="name_label">Ім'я</entry>
+<entry key="ownerName_promtText">Введіть ім'я нового власника</entry>
+<entry key="ownerNotFound_label">Користувача з вказаним ім'ям не знайдено.</entry>
+<entry key="groupName_promtText">Введіть назву нової групи</entry>
+<entry key="groupNotFound_label">Групу з такою назвою не знайдено.</entry>
+<entry key="value_label">Значення</entry>
+<entry key="extendedAttributeValue_promtText">Введіть значення атрибуту</entry>
+<entry key="extendedAttributeName_label">Назва</entry>
+<entry key="editCreationTime_checkBox">Дата створення</entry>
+<entry key="editLastModifiedTime_checkBox">Дата редагування</entry>
+<entry key="editOwner_checkBox">Власник</entry>
+<entry key="editGroup_checkBox">Група</entry>
+<entry key="editPermissions_checkBox">Права</entry>
+<entry key="editExtendedAttributes_checkBox">Додаткові атрибути</entry>
+<entry key="extendedAttributeName_label">Назва</entry>
+<!--CopyFilesDialog-->
+<entry key="copyiyng_title">Копіювання</entry>
+<entry key="fileName_label">Назва файлу:</entry>
+<entry key="totalFilesNumber_label">Всього файлів:</entry>
+<entry key="totalSize_label">Розмір:</entry>
+<entry key="copiedBytes_label">Скопійовано (байт):</entry>
+<entry key="totalSizeBytes_label">Розмір (байт):</entry>
+<entry key="copiedSize_label">Скопійовано:</entry>
+<entry key="speed_label">Швидкість:</entry>
+<entry key="progressFiles_label">Прогрес:</entry>
+<entry key="leftTime_label">Часу залишилось:</entry>
+<entry key="spendTime_label">Часу витрачено:</entry>
+<entry key="stopOperation_button">Відмінити</entry>
+<entry key="copyingFilesHaveBeenCompleted_str">Копіювання файлів успішно завершено.</entry>
+<entry key="copyingFilesHaveBeenStopped_str">Операція скасована.</entry>
+<!--FavoritesDialog-->
+<entry key="directory_str">Каталог</entry>
+<entry key="regularFile_str">Файл</entry>
+<entry key="symbolicLink_str">Символічне посилання</entry>
+<!--OpenWith Diaglog-->
+<entry key="programName_label">Назва програми</entry>
+<entry key="enterNameProgramHere_str">Введіть назву програми</entry>
+<entry key="enterCommandToExecuteHere_str">Введіть команду, що буде виконана</entry>
+<entry key="useProgramName_radioButton">Назва програми</entry>
+<entry key="useCustomCommand_radioButton">Команда</entry>
+<entry key="execute_button">Виконати</entry>
+<entry key="deletedFiles_label">Видалено файлів:</entry>
+<entry key="deletingFiles_dialogTitle">Видалення файлів</entry>
+<entry key="errorsLog_titledPane">Помилки</entry>
+<entry key="deletingOperationWithErrors_str">Видалення файлів завешено з помилками.</entry>
+<entry key="deletingFilesHaveBeenCompleted_str">Видалення файлів успішно завершено.</entry>
+<entry key="accessDenied_str">Доступ обмежено</entry>
+<!--FileStoreInfo-->
+<entry key="totalSpace_fileStoreInfo_Label">Всього:</entry>
+<entry key="freeSpace_fileStoreInfo_Label">Доступно:</entry>
+<entry key="usedSpace_fileStoreInfo_Label">Використано:</entry>
+<entry key="fileSystemName_fileStoreInfo_Label">Файлова система:</entry>
+<entry key="path_fileStoreInfo_Label">Шлях:</entry>
+<entry key="execute_button">Виконати</entry>
+<entry key="deletedFiles_label">Видалено файлів:</entry>
+<entry key="deletingFiles_dialogTitle">Видалення файлів</entry>
+<entry key="errorsLog_titledPane">Помилки</entry>
+<entry key="deletingOperationWithErrors_str">Видалення файлів завешено з помилками.</entry>
+<entry key="deletingFilesHaveBeenCompleted_str">Видалення файлів успішно завершено.</entry>
+<entry key="accessDenied_str">Доступ обмежено</entry>
+</properties>

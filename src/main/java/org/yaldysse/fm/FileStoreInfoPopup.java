@@ -19,6 +19,7 @@ import java.nio.file.FileStore;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Properties;
 
 /**Описывает всплывающее окно, в котором отображена информация об хранилище данных
  * (раздел, диск и т.д.).*/
@@ -46,13 +47,15 @@ public class FileStoreInfoPopup extends Popup
     private Label fileSystemNameValue_Label;
     private Label fileStoreLabelValue_Label;
     private Label fileStorePathValue_Label;
+    private Properties language;
 
-    public FileStoreInfoPopup(final Path targetPath)
+    public FileStoreInfoPopup(final Path targetPath, final Properties languageProperties)
     {
         if (targetPath == null)
         {
             return;
         }
+        language = languageProperties;
 
         path = targetPath;
         initializeComponents();
@@ -75,27 +78,32 @@ public class FileStoreInfoPopup extends Popup
         //fileStoreName_Label = new Label("Name");
 
         Font textFont = Font.font(Font.getDefault().getName(),
-                FontWeight.BOLD, 13.0D);
-        totalSpace_Label = new Label("Total space:");
+                FontWeight.BOLD, 12.0D);
+        totalSpace_Label = new Label(language.getProperty("totalSpace_fileStoreInfo_Label",
+                "Total space:"));
         //totalSpace_Label.setTextFill(Color.GREEN);
         totalSpace_Label.setFont(textFont);
 
-        freeSpace_Label = new Label("Free space:");
+        freeSpace_Label = new Label(language.getProperty("freeSpace_fileStoreInfo_Label",
+                "Free space:"));
         freeSpace_Label.setFont(textFont);
 
-        usedSpace_Label = new Label("Used space:");
+        usedSpace_Label = new Label(language.getProperty("usedSpace_fileStoreInfo_Label",
+                "Used space:"));
         usedSpace_Label.setFont(textFont);
 
 //        unallocatedSpace_Label = new Label("Unallocated space:");
 //        unallocatedSpace_Label.setFont(textFont);
 
-        fileSystemName_Label = new Label("File System:");
+        fileSystemName_Label = new Label(language.getProperty("fileSystemName_fileStoreInfo_Label",
+                "File System:"));
         fileSystemName_Label.setFont(textFont);
 
         fileStoreLabel_Label = new Label("Label:");
         fileStoreLabel_Label.setFont(textFont);
 
-        fileStorePath_Label = new Label("Path");
+        fileStorePath_Label = new Label(language.getProperty("path_fileStoreInfo_Label",
+                "Path"));
         fileStorePath_Label.setFont(textFont);
 
 

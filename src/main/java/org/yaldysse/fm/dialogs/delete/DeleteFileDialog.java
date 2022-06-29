@@ -1,7 +1,9 @@
 package org.yaldysse.fm.dialogs.delete;
 
+import com.sun.source.tree.NewClassTree;
 import javafx.event.ActionEvent;
 import javafx.geometry.Insets;
+import javafx.geometry.Orientation;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
@@ -14,21 +16,20 @@ import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
 import org.yaldysse.fm.FM_GUI;
-import org.yaldysse.fm.dialogs.ConfirmDialogButtonType;
-import org.yaldysse.fm.dialogs.ConfirmOperationDialog;
-import org.yaldysse.fm.dialogs.FilesNumberAndSizeCalculator;
-import org.yaldysse.fm.dialogs.SimpleFileSizeAndNumberCounter;
+import org.yaldysse.fm.dialogs.*;
 import org.yaldysse.tools.StorageCapacity;
 
 import java.nio.file.Path;
 import java.text.NumberFormat;
+import java.util.ArrayList;
+import java.util.Properties;
 
 /**
  * Описывает диалоговое окно с удалением файлов. После согласия на удаление
  * отображается окно с процессом удаления. Удаление происходит в отдельном потоке,
  * поведение которого описывает класс {@link org.yaldysse.fm.dialogs.delete.DeleteFiles}.
  * Взаимодействие потока удаления файлов и компонентов GUI происходит при помощи вызова
- * метода {@link org.yaldysse.fm.dialogs.delete.DeleteProgress#appearDeleteProgress(int, Path, boolean, boolean)},
+ * метода {@link org.yaldysse.fm.dialogs.delete.DeleteProgress#appearDeleteProgress(int, Path, boolean, boolean, ArrayList)} (int, Path, boolean, boolean)},
  * который определен без реализации в интерфейсе {@link org.yaldysse.fm.dialogs.delete.DeleteProgress}
  */
 public class DeleteFileDialog implements FilesNumberAndSizeCalculator, DeleteProgress
@@ -67,14 +68,18 @@ public class DeleteFileDialog implements FilesNumberAndSizeCalculator, DeletePro
     private DeleteFiles deleteFilesRunnable;
     private DeleteOperationResult operationResult;
     private Button ok_Button;
+    private VBox errors_VBox;
+    private TitledPane errorLog_TitledPane;
+    private Properties language;
 
     private VBox filesToDeleting_VBox;
     private Label[] files_Labels;
     private FM_GUI fm_gui;
 
 
-    public DeleteFileDialog(final Path targetPath)
+    public DeleteFileDialog(final Path targetPath, final Properties newLanguageProperties)
     {
+        language = newLanguageProperties;
         initializeComponents();
         countFiles = 0;
         totalSize = 0;
@@ -87,8 +92,9 @@ public class DeleteFileDialog implements FilesNumberAndSizeCalculator, DeletePro
     /**
      * В таком случае в обязательном порядке воспользоваться методом {@link #setTargetPath(Path)}
      */
-    public DeleteFileDialog(FM_GUI aFmGui)
+    public DeleteFileDialog(FM_GUI aFmGui, final Properties newLanguageProperties)
     {
+        language = newLanguageProperties;
         initializeComponents();
         countFiles = 0;
         totalSize = 0;
@@ -97,8 +103,9 @@ public class DeleteFileDialog implements FilesNumberAndSizeCalculator, DeletePro
         initializeConfirmDialogComponents();
     }
 
-    public DeleteFileDialog(final Path[] targetPaths, FM_GUI aFmGui)
+    public DeleteFileDialog(final Path[] targetPaths, FM_GUI aFmGui, final Properties newLanguageProperties)
     {
+        language = newLanguageProperties;
         initializeComponents();
         countFiles = 0;
         totalSize = 0;
@@ -133,35 +140,58 @@ public class DeleteFileDialog implements FilesNumberAndSizeCalculator, DeletePro
         title_HBox.setAlignment(Pos.CENTER);
         HBox.setHgrow(title_HBox, Priority.ALWAYS);
 
-        fileName_Label = new Label("Name of file:");
+        fileName_Label = new Label(language.getProperty("fileName_label",
+                "Name of file:"));
 
         fileNameValue_Label = new Label("?");
         fileNameValue_Label.setFont(Font.font(Font.getDefault().getName(), FontWeight.BOLD, 11.0D));
 
-        totalFilesNumber_Label = new Label("Total files:");
+        totalFilesNumber_Label = new Label(language.getProperty("totalFilesNumber_label",
+                "Total files:"));
         totalFilesNumberValue_Label = new Label("?");
 
-        totalSize_Label = new Label("Total size:");
+        totalSize_Label = new Label(language.getProperty("totalSize_label",
+                "Total size:"));
         totalSize_Label.setFont(Font.font(Font.getDefault().getName(), FontWeight.BOLD, 14.0D));
         totalSizeValue_Label = new Label("?");
 
-        deletedFiles_Label = new Label("Deleted files:");
+        deletedFiles_Label = new Label(language.getProperty("deletedFiles_label",
+                "Deleted files:"));
         deletedFilesValue_Label = new Label("? of ?");
 
-        totalSizeBytes_Label = new Label("Total size (bytes):");
+        totalSizeBytes_Label = new Label(language.getProperty("totalSizeBytes_label",
+                "Total size (bytes):"));
         totalSizeBytes_Label.setFont(Font.font(Font.getDefault().getName(), FontWeight.BOLD, 14.0D));
         totalSizeBytesValue_Label = new Label("?");
 
-        progressFiles_Label = new Label("Progress:");
+        progressFiles_Label = new Label(language.getProperty("progressFiles_label",
+                "Progress:"));
         progressFiles_Label.setFont(Font.font(Font.getDefault().getName(), FontWeight.BOLD, 14.0D));
         progressFilesValue_Label = new Label("?");
 
         progressBar = new ProgressBar(0.0D);
         progressBar.setPrefWidth(Region.USE_COMPUTED_SIZE);
+        progressBar.setMinHeight(rem);
 
 
         progressIndicator = new ProgressIndicator();
         progressIndicator.setPrefHeight(20.0D);
+
+        errors_VBox = new VBox(rem * 0.5D);
+        errors_VBox.setFillWidth(true);
+        errors_VBox.setPadding(new Insets(rem * 0.3D));
+
+        ScrollPane scrollPane = new ScrollPane();
+        scrollPane.setFitToHeight(true);
+        scrollPane.setFitToWidth(true);
+        scrollPane.setContent(errors_VBox);
+
+        errorLog_TitledPane = new TitledPane();
+        errorLog_TitledPane.setText(language.getProperty("errorsLog_titledPane",
+                "Errors"));
+        errorLog_TitledPane.setContent(scrollPane);
+        errorLog_TitledPane.setVisible(false);
+
 
         operationInfo_GridPane = new GridPane();
         operationInfo_GridPane.setHgap(rem * 1.15D);
@@ -180,6 +210,10 @@ public class DeleteFileDialog implements FilesNumberAndSizeCalculator, DeletePro
 //        operationInfo_GridPane.addRow(operationInfo_GridPane.getRowCount(), deletedFiles_Label,
 //                deletedFilesValue_Label);
         operationInfo_GridPane.addRow(operationInfo_GridPane.getRowCount(), progressIndicator);
+        operationInfo_GridPane.add(errorLog_TitledPane, 0, operationInfo_GridPane.getRowCount(),
+                3, 1);
+        GridPane.setHgrow(errorLog_TitledPane, Priority.ALWAYS);
+
 
         progress_HBox = new HBox(progressBar);
         progress_HBox.setBackground(new Background(new BackgroundFill(Color.BLACK, CornerRadii.EMPTY, Insets.EMPTY)));
@@ -189,7 +223,8 @@ public class DeleteFileDialog implements FilesNumberAndSizeCalculator, DeletePro
 
         progressBar.prefWidthProperty().bind(progress_HBox.widthProperty());
 
-        stopDeleting_Button = new Button("Cancel");
+        stopDeleting_Button = new Button(language.getProperty("stopOperation_button",
+                "Cancel"));
         stopDeleting_Button.setOnAction(this::stopDeleting_ButtonAction);
 
         ok_Button = new Button("OK");
@@ -212,7 +247,8 @@ public class DeleteFileDialog implements FilesNumberAndSizeCalculator, DeletePro
 
         stage = new Stage();
         stage.setScene(scene);
-        stage.setTitle("Deleting Files");
+        stage.setTitle(language.getProperty("deletingFiles_dialogTitle",
+                "Deleting Files"));
         stage.initStyle(StageStyle.TRANSPARENT);
     }
 
@@ -247,6 +283,42 @@ public class DeleteFileDialog implements FilesNumberAndSizeCalculator, DeletePro
 
     }
 
+    private void addItemToErrorsVBox(final Path targetPath, final String description)
+    {
+        if (errors_VBox.getChildren().size() >= 10)
+        {
+            return;
+        }
+
+        VBox item_VBox = new VBox(rem * 0.2D);
+        item_VBox.setFillWidth(true);
+
+        Label targetFilePath_Label = new Label(targetPath.getFileName().toString());
+        targetFilePath_Label.setFont(Font.font(Font.getDefault().getName(),
+                FontWeight.BOLD, 14.0D));
+
+        Label errorDescription_Label = new Label(description);
+        errorDescription_Label.setTextFill(Color.WHITESMOKE);
+        errorDescription_Label.setFont(Font.font(Font.getDefault().getName(),
+                FontWeight.BOLD, 12.0D));
+
+        HBox errorDescription_HBox = new HBox(errorDescription_Label);
+        errorDescription_HBox.setPrefWidth(
+                errorDescription_Label.getBoundsInParent().getWidth() + rem * 2.0D);
+        errorDescription_HBox.setAlignment(Pos.CENTER);
+        errorDescription_HBox.setBackground(new Background(new BackgroundFill(
+                Color.CRIMSON, new CornerRadii(2D), Insets.EMPTY)));
+        errorDescription_HBox.setOnMouseClicked(event ->
+        {
+            new FileAttributesEditor(targetPath, language).show();
+        });
+
+        item_VBox.getChildren().addAll(targetFilePath_Label, errorDescription_HBox,
+                new Separator(Orientation.HORIZONTAL));
+
+        errors_VBox.getChildren().add(item_VBox);
+    }
+
     /**
      * Позволяет задать файлы, над которыми нужно будет применить операцию. Автоматически
      * запрашивает пересчет количества файлов и размер.
@@ -260,6 +332,7 @@ public class DeleteFileDialog implements FilesNumberAndSizeCalculator, DeletePro
         paths[0] = targetPath;
         updateFilesList();
         createAndStartThread();
+        errors_VBox.getChildren().clear();
         if (!operationInfo_GridPane.getChildren().contains(progressIndicator))
         {
             operationInfo_GridPane.getChildren().add(progressIndicator);
@@ -282,6 +355,7 @@ public class DeleteFileDialog implements FilesNumberAndSizeCalculator, DeletePro
 
         updateFilesList();
         createAndStartThread();
+        errors_VBox.getChildren().clear();
         if (!operationInfo_GridPane.getChildren().contains(progressIndicator))
         {
             operationInfo_GridPane.getChildren().add(progressIndicator);
@@ -372,7 +446,8 @@ public class DeleteFileDialog implements FilesNumberAndSizeCalculator, DeletePro
      */
     @Override
     public void appearDeleteProgress(int aDeletedFilesNumber, Path currentPath,
-                                     final boolean completed, final boolean canceled)
+                                     final boolean completed, final boolean canceled,
+                                     final ArrayList<Path> accessDeniedErrorsPaths)
     {
         fileNameValue_Label.setText(currentPath.toAbsolutePath().toString());
         //deletedFilesValue_Label.setText("" + aDeletedFilesNumber);
@@ -388,24 +463,53 @@ public class DeleteFileDialog implements FilesNumberAndSizeCalculator, DeletePro
         {
             if (canceled)
             {
-                fileNameValue_Label.setText("Deleting files have been canceled.");
+                fileNameValue_Label.setText(language.getProperty("copyingFilesHaveBeenStopped_str",
+                        "Deleting files have been canceled."));
                 operationResult = DeleteOperationResult.CANCELED;
 
             }
             else if (deletedFiles == countFiles)
             {
-                fileNameValue_Label.setText("Files have been successfully deleted.");
+                fileNameValue_Label.setText(language.getProperty("deletingFilesHaveBeenCompleted_str",
+                        "Files have been successfully deleted."));
                 operationResult = DeleteOperationResult.COMPLETED_SUCCESSFULLY;
             }
             else
             {
-                fileNameValue_Label.setText("Deleting operation have been ended with errors.");
+                fileNameValue_Label.setText(language.getProperty("deletingOperationWithErrors_str",
+                        "Deleting operation have been ended with errors."));
                 operationResult = DeleteOperationResult.COMPLETED_WITH_ERRORS;
+
+                if (accessDeniedErrorsPaths.size() > 0)
+                {
+                    for (Path temporaryPath : accessDeniedErrorsPaths)
+                        errorDetected(temporaryPath, language.getProperty("accessDenied_str",
+                                "Access Denied"));
+                }
             }
             stopDeleting_Button.setDisable(true);
             ok_Button.setDisable(false);
-            fm_gui.updateFilesListAfterDeleting(operationResult);
+            //fm_gui.updateFilesListAfterDeleting(operationResult);
         }
+    }
+
+    @Override
+    public void errorDetected(Path targetPath, String description)
+    {
+        //System.out.println(targetPath.toString());
+        if (!errorLog_TitledPane.isVisible())
+        {
+            errorLog_TitledPane.setVisible(true);
+        }
+        if (errors_VBox.getChildren().size() == 9)
+        {
+            addItemToErrorsVBox(Path.of("<more>"), description);
+        }
+        if (errors_VBox.getChildren().size() >= 10)
+        {
+            return;
+        }
+        addItemToErrorsVBox(targetPath, description);
     }
 
     private void stopDeleting_ButtonAction(ActionEvent event)

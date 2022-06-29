@@ -32,6 +32,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Properties;
 
 public class FileAttributesEditor implements FilesNumberAndSizeCalculator
 {
@@ -130,9 +131,20 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
     private ProgressIndicator sizeProgressIndicator;
     private ProgressIndicator filesNumber_ProgressIndicator;
 
-    public FileAttributesEditor(final Path file)
+    /*Контейнеры для checkBox'ов и разделителей.*/
+    private HBox editCreationTime_HBox;
+    private HBox editPermissions_HBox;
+    private HBox editLastModifiedTime_HBox;
+    private HBox editGroup_HBox;
+    private HBox editExtendedAttributes_HBox;
+
+
+    private Properties language;
+
+    public FileAttributesEditor(final Path file, final Properties newLanguageProperties)
     {
         targetFile_Path = file;
+        language = newLanguageProperties;
         initializeComponents();
         createAndStartFileSizeAndNumberCounterThread();
     }
@@ -157,7 +169,8 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
 
         info_edit_TabPane = new TabPane();
 
-        Tab infoAboutFile_Tab = new Tab("Info");
+        Tab infoAboutFile_Tab = new Tab(language.getProperty("infoAboutFile_tab",
+                "Info"));
         infoAboutFile_Tab.setClosable(false);
         infoAboutFile_Tab.selectedProperty().addListener(event ->
         {
@@ -179,7 +192,8 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
             }
         });
 
-        Tab editAttributes_Tab = new Tab("Edit");
+        Tab editAttributes_Tab = new Tab(language.getProperty("editAttributes_tab",
+                "Edit"));
         editAttributes_Tab.setClosable(false);
         editAttributes_Tab.selectedProperty().addListener(event ->
         {
@@ -223,12 +237,18 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
         //attributes_GridPane.setGridLinesVisible(true);
         attributes_GridPane.setVgap(FM_GUI.rem * 0.35D);
 
-        ownerAttribute_Label = new Label("Owner:");
-        groupAttribute_Label = new Label("Group:");
-        sizeBytesAttribute_Label = new Label("Size (bytes):");
-        filesNumberInside_Label = new Label("Files:");
-        creationTimeAttribute_Label = new Label("Creation time:");
-        lastModifiedTimeAttribute_Label = new Label("Last Modified time:");
+        ownerAttribute_Label = new Label(language.getProperty("ownerAttribute_label",
+                "Owner:"));
+        groupAttribute_Label = new Label(language.getProperty("groupAttribute_label",
+                "Group:"));
+        sizeBytesAttribute_Label = new Label(language.getProperty("sizeBytesAttribute_label",
+                "Size (bytes):"));
+        filesNumberInside_Label = new Label(language.getProperty("filesNumberInside_label",
+                "Files:"));
+        creationTimeAttribute_Label = new Label(language.getProperty("creationTimeAttribute_label",
+                "Creation time:"));
+        lastModifiedTimeAttribute_Label = new Label(language.getProperty("lastModifiedTimeAttribute_label",
+                "Last modified time:"));
 
         firstSeparator = new Separator(Orientation.HORIZONTAL);
 
@@ -272,13 +292,17 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
         info_ScrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
 
         //------------------------- Подготовка узлов для прав доступа
-        permission_Label = new Label("Permissions");
+        permission_Label = new Label(language.getProperty("permissions_label",
+                "Permissions"));
         permissionTitle_HBox = new HBox(permission_Label);
         permissionTitle_HBox.setAlignment(Pos.CENTER);
 
-        ownerPermissionsBlock_Label = new Label("Owner:");
-        groupPermissionsBlock_Label = new Label("Group:");
-        otherPermissionsBlock_Label = new Label("Other:");
+        ownerPermissionsBlock_Label = new Label(language.getProperty("ownerPermissionsBlock_Label",
+                "Owner:"));
+        groupPermissionsBlock_Label = new Label(language.getProperty("groupPermissionsBlock_Label",
+                "Group:"));
+        otherPermissionsBlock_Label = new Label(language.getProperty("otherPermissionsBlock_Label",
+                "Other:"));
 
         ownerPermissionsBlock_VBox = new VBox(ownerPermissionsBlock_Label);
         ownerPermissionsBlock_VBox.setAlignment(Pos.CENTER);
@@ -506,7 +530,10 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
 
     private void initializeEditTab()
     {
-        editCreationTime_CheckBox = new CheckBox("Creation time ------------------------");
+        final double separatorHeight = 0.3D;
+
+        editCreationTime_CheckBox = new CheckBox(language.getProperty("editCreationTime_checkBox",
+                "Creation time"));
         editCreationTime_CheckBox.setTextFill(Color.HONEYDEW);
         editCreationTime_CheckBox.setFont(Font.font(Font.getDefault().getName(), FontWeight.BOLD, 14.0D));
         editCreationTime_CheckBox.setOnAction(event ->
@@ -519,7 +546,8 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
                 }
                 if (!edit_VBox.getChildren().contains(creationTimeEditorPane_VBox))
                 {
-                    edit_VBox.getChildren().add(1, creationTimeEditorPane_VBox);
+                    edit_VBox.getChildren().add(edit_VBox.getChildren().indexOf(editCreationTime_HBox) +1,
+                            creationTimeEditorPane_VBox);
                 }
                 apply_Button.setDisable(false);
             }
@@ -536,7 +564,16 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
             }
         });
 
-        editLastModifiedTime_CheckBox = new CheckBox("Last modified time ----------------");
+        Separator firstSeparator = new Separator(Orientation.HORIZONTAL);
+        firstSeparator.setMinHeight(FM_GUI.rem * 0.2D);
+        editCreationTime_HBox = new HBox(FM_GUI.rem * 0.5D, editCreationTime_CheckBox,
+                firstSeparator);
+        editCreationTime_HBox.setAlignment(Pos.CENTER_LEFT);
+        HBox.setHgrow(firstSeparator, Priority.ALWAYS);
+
+
+        editLastModifiedTime_CheckBox = new CheckBox(language.getProperty("editLastModifiedTime_checkBox",
+                "Last modified time"));
         editLastModifiedTime_CheckBox.setBackground(Background.EMPTY);
         editLastModifiedTime_CheckBox.setTextFill(Color.HONEYDEW);
         editLastModifiedTime_CheckBox.setFont(Font.font(Font.getDefault().getName(), FontWeight.BOLD, 14.0D));
@@ -548,7 +585,7 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
                 {
                     initializeLastModifiedTimeEditorPane();
                 }
-                edit_VBox.getChildren().add(edit_VBox.getChildren().indexOf(editLastModifiedTime_CheckBox) + 1,
+                edit_VBox.getChildren().add(edit_VBox.getChildren().indexOf(editLastModifiedTime_HBox) + 1,
                         lastModifiedTimeEditorPane_VBox);
                 apply_Button.setDisable(false);
             }
@@ -566,7 +603,15 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
             }
         });
 
-        editPermissions_CheckBox = new CheckBox("Permissions --------------------------");
+        Separator secondSeparator = new Separator(Orientation.HORIZONTAL);
+        secondSeparator.setMinHeight(FM_GUI.rem * 0.2D);
+        editLastModifiedTime_HBox = new HBox(FM_GUI.rem * 0.5D, editLastModifiedTime_CheckBox,
+                secondSeparator);
+        editLastModifiedTime_HBox.setAlignment(Pos.CENTER_LEFT);
+        HBox.setHgrow(secondSeparator, Priority.ALWAYS);
+
+        editPermissions_CheckBox = new CheckBox(language.getProperty("editPermissions_checkBox",
+                "Permissions"));
         editPermissions_CheckBox.setTextFill(Color.HONEYDEW);
         editPermissions_CheckBox.setFont(Font.font(Font.getDefault().getName(), FontWeight.BOLD, 14.0D));
         editPermissions_CheckBox.setOnAction(event ->
@@ -578,7 +623,8 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
                     initializePermissionSelector();
                 }
                 setPermissionValuesToCheckBoxws();
-                edit_VBox.getChildren().add(edit_VBox.getChildren().indexOf(editPermissions_CheckBox) + 1, permissionSelector_GridPane);
+                edit_VBox.getChildren().add(edit_VBox.getChildren().indexOf(editPermissions_HBox) + 1,
+                        permissionSelector_GridPane);
                 apply_Button.setDisable(false);
             }
             else
@@ -595,7 +641,15 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
             }
         });
 
-        editOwner_CheckBox = new CheckBox("Owner ----------------------------------");
+        Separator thirdSeparator = new Separator(Orientation.HORIZONTAL);
+        thirdSeparator.setMinHeight(FM_GUI.rem * 0.2D);
+        editPermissions_HBox = new HBox(FM_GUI.rem * 0.5D, editPermissions_CheckBox,
+                thirdSeparator);
+        editPermissions_HBox.setAlignment(Pos.CENTER_LEFT);
+        HBox.setHgrow(thirdSeparator, Priority.ALWAYS);
+
+        editOwner_CheckBox = new CheckBox(language.getProperty("editOwner_checkBox",
+                "Owner"));
         editOwner_CheckBox.setTextFill(Color.HONEYDEW);
         editOwner_CheckBox.setFont(Font.font(Font.getDefault().getName(), FontWeight.BOLD, 14.0D));
         editOwner_CheckBox.setOnAction(event ->
@@ -606,7 +660,8 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
                 {
                     initializeOwnerEditorPane();
                 }
-                edit_VBox.getChildren().add(edit_VBox.getChildren().indexOf(editOwner_HBox) + 1, ownerEditorPane_VBox);
+                edit_VBox.getChildren().add(edit_VBox.getChildren().indexOf(editOwner_HBox) + 1,
+                        ownerEditorPane_VBox);
                 apply_Button.setDisable(false);
             }
             else
@@ -623,7 +678,11 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
             }
         });
 
-        editGroup_CheckBox = new CheckBox("Group ----------------------------------");
+        Separator fourthSeparator = new Separator(Orientation.HORIZONTAL);
+        fourthSeparator.setMinHeight(FM_GUI.rem * 0.2D);
+
+        editGroup_CheckBox = new CheckBox(language.getProperty("editGroup_checkBox",
+                "Group"));
         editGroup_CheckBox.setTextFill(Color.HONEYDEW);
         editGroup_CheckBox.setFont(Font.font(Font.getDefault().getName(), FontWeight.BOLD, 14.0D));
         editGroup_CheckBox.setOnAction(event ->
@@ -634,7 +693,7 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
                 {
                     initializeGroupEditorPane();
                 }
-                edit_VBox.getChildren().add(edit_VBox.getChildren().indexOf(editGroup_CheckBox) + 1, groupEditorPane_VBox);
+                edit_VBox.getChildren().add(edit_VBox.getChildren().indexOf(editGroup_HBox) + 1, groupEditorPane_VBox);
                 apply_Button.setDisable(false);
             }
             else
@@ -650,7 +709,15 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
             }
         });
 
-        editExtendedAttributes_CheckBox = new CheckBox("Extended Attributes ---------");
+        Separator fifthSeparator = new Separator(Orientation.HORIZONTAL);
+        fifthSeparator.setMinHeight(FM_GUI.rem * 0.2D);
+        editGroup_HBox = new HBox(FM_GUI.rem * 0.5D, editGroup_CheckBox,
+                fifthSeparator);
+        editGroup_HBox.setAlignment(Pos.CENTER_LEFT);
+        HBox.setHgrow(fifthSeparator, Priority.ALWAYS);
+
+        editExtendedAttributes_CheckBox = new CheckBox(language.getProperty("editExtendedAttributes_checkBox",
+                "Extended Attributes"));
         editExtendedAttributes_CheckBox.setTextFill(Color.HONEYDEW);
         editExtendedAttributes_CheckBox.setFont(Font.font(Font.getDefault().getName(), FontWeight.BOLD, 14.0D));
         editExtendedAttributes_CheckBox.setOnAction(event ->
@@ -661,7 +728,8 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
                 {
                     initializeExtendedAttributesEditorPane();
                 }
-                edit_VBox.getChildren().add(edit_VBox.getChildren().indexOf(editExtendedAttributes_CheckBox) + 1, extendedAttributesEditorPane_VBox);
+                edit_VBox.getChildren().add(edit_VBox.getChildren().indexOf(editExtendedAttributes_HBox) + 1,
+                        extendedAttributesEditorPane_VBox);
                 //apply_Button.setDisable(false);
             }
             else
@@ -678,6 +746,13 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
             }
         });
 
+        Separator sixthSeparator = new Separator(Orientation.HORIZONTAL);
+        sixthSeparator.setMinHeight(FM_GUI.rem * 0.2D);
+        editExtendedAttributes_HBox = new HBox(FM_GUI.rem * 0.5D, editExtendedAttributes_CheckBox,
+                sixthSeparator);
+        editExtendedAttributes_HBox.setAlignment(Pos.CENTER_LEFT);
+        HBox.setHgrow(sixthSeparator, Priority.ALWAYS);
+
         Image warning_Image = new Image(getClass().getResourceAsStream("/Images/caution.png"));
         ImageView warning_ImageView = new ImageView(warning_Image);
         warning_ImageView.setPreserveRatio(true);
@@ -692,9 +767,13 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
             warning_MouseExited();
         });
 
-        editOwner_HBox = new HBox(FM_GUI.rem * 0.7D, editOwner_CheckBox, warning_ImageView);
+        editOwner_HBox = new HBox(FM_GUI.rem * 0.7D, editOwner_CheckBox,
+                warning_ImageView, fourthSeparator);
+        editOwner_HBox.setAlignment(Pos.CENTER_LEFT);
+        HBox.setHgrow(fourthSeparator, Priority.ALWAYS);
 
-        apply_Button = new Button("Apply");
+        apply_Button = new Button(language.getProperty("apply_button",
+                "Apply"));
         apply_Button.setDisable(true);
         //apply_Button.setTextFill(Color.HONEYDEW);
         apply_Button.setFont(Font.font(Font.getDefault().getName(), FontWeight.BOLD, 13.0D));
@@ -708,8 +787,8 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
         HBox apply_HBox = new HBox(apply_Button);
         apply_HBox.setAlignment(Pos.CENTER_RIGHT);
 
-        edit_VBox = new VBox(FM_GUI.rem * 0.5D, editCreationTime_CheckBox, editLastModifiedTime_CheckBox,
-                editOwner_HBox, editGroup_CheckBox, editPermissions_CheckBox, editExtendedAttributes_CheckBox, apply_HBox);
+        edit_VBox = new VBox(FM_GUI.rem * 0.5D, editCreationTime_HBox, editLastModifiedTime_HBox,
+                editOwner_HBox, editGroup_HBox, editPermissions_HBox, editExtendedAttributes_HBox, apply_HBox);
         edit_VBox.setPadding(new Insets(FM_GUI.rem * 0.5, 0.0D, 0.0D, 0.0D));
 
         edit_ScrollPane = new ScrollPane(edit_VBox);
@@ -872,7 +951,8 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
         creationTime_Picker.setShowWeekNumbers(true);
         creationTime_Picker.setPrefWidth(new Text("28.04.2022_282828").getBoundsInParent().getWidth());
 
-        Label date_Label = new Label("Date");
+        Label date_Label = new Label(language.getProperty("date_label",
+                "Date"));
         date_Label.setTextFill(Color.HONEYDEW);
         date_Label.setFont(Font.font(Font.getDefault().getName(), FontWeight.BOLD, 13.0D));
 
@@ -916,7 +996,8 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
             previousTextFieldText[0] = creationTime_TextField.getText();
         });
 
-        Label time_Label = new Label("Time");
+        Label time_Label = new Label(language.getProperty("time_label",
+                "Time"));
         time_Label.setTextFill(Color.HONEYDEW);
         time_Label.setFont(Font.font(Font.getDefault().getName(), FontWeight.BOLD, 13.0D));
 
@@ -954,7 +1035,8 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
         lastModifiedDate_Picker.setShowWeekNumbers(true);
         lastModifiedDate_Picker.setPrefWidth(new Text("28.04.2022_282828").getBoundsInParent().getWidth());
 
-        Label date_Label = new Label("Date");
+        Label date_Label = new Label(language.getProperty("date_label",
+                "Date"));
         date_Label.setTextFill(Color.HONEYDEW);
         date_Label.setFont(Font.font(Font.getDefault().getName(), FontWeight.BOLD, 13.0D));
 
@@ -997,7 +1079,8 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
             previousTextFieldText[0] = lastModifiedTime_TextField.getText();
         });
 
-        Label time_Label = new Label("Time");
+        Label time_Label = new Label(language.getProperty("time_label",
+                "Time"));
         time_Label.setTextFill(Color.HONEYDEW);
         time_Label.setFont(Font.font(Font.getDefault().getName(), FontWeight.BOLD, 13.0D));
 
@@ -1032,7 +1115,8 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
         newUserPrincipal = new UserPrincipal[1];
         UserPrincipalLookupService userPrincipalLookupService = targetFile_Path.getFileSystem().getUserPrincipalLookupService();
 
-        Label name_Label = new Label("Name");
+        Label name_Label = new Label(language.getProperty("name_label",
+                "Name"));
         name_Label.setTextFill(Color.HONEYDEW);
         name_Label.setFont(Font.font(Font.getDefault().getName(), FontWeight.BOLD, 13.0D));
 
@@ -1040,7 +1124,8 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
         forCalculateWidth_Text.setFont(name_Label.getFont());
         name_Label.setMinWidth(forCalculateWidth_Text.getBoundsInParent().getWidth());
 
-        Label ownerNotFound_Label = new Label("User with specified name doesn't exist.");
+        Label ownerNotFound_Label = new Label(language.getProperty("ownerNotFound_label",
+                "User with specified name doesn't exist."));
         ownerNotFound_Label.setTextFill(Color.FIREBRICK);
         ownerNotFound_Label.setEffect(new DropShadow(20.0D, Color.GAINSBORO));
         ownerNotFound_Label.setFont(Font.font(Font.getDefault().getName(), FontWeight.BOLD, 13.0D));
@@ -1050,7 +1135,8 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
         ownerNotFound_HBox.setAlignment(Pos.CENTER_RIGHT);
 
         TextField ownerName_TextField = new TextField();
-        ownerName_TextField.setPromptText("Enter here name of new owner");
+        ownerName_TextField.setPromptText(language.getProperty("ownerName_promtText",
+                "Enter here name of new owner"));
         ownerName_TextField.setText(posixFileAttributes.owner().toString());
         //ownerName_TextField.setPrefColumnCount(12);
         ownerName_TextField.setOnKeyTyped(event ->
@@ -1110,7 +1196,8 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
         newGroupPrincipal = new GroupPrincipal[1];
         UserPrincipalLookupService userPrincipalLookupService = targetFile_Path.getFileSystem().getUserPrincipalLookupService();
 
-        Label name_Label = new Label("Name");
+        Label name_Label = new Label(language.getProperty("name_label",
+                "Name"));
         name_Label.setTextFill(Color.HONEYDEW);
         name_Label.setFont(Font.font(Font.getDefault().getName(), FontWeight.BOLD, 13.0D));
 
@@ -1118,7 +1205,8 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
         forCalculateWidth_Text.setFont(name_Label.getFont());
         name_Label.setMinWidth(forCalculateWidth_Text.getBoundsInParent().getWidth());
 
-        Label groupNotFound_Label = new Label("Group with specified name doesn't exist.");
+        Label groupNotFound_Label = new Label(language.getProperty("groupNotFound_label",
+                "Group with specified name doesn't exist."));
         groupNotFound_Label.setTextFill(Color.FIREBRICK);
         groupNotFound_Label.setEffect(new DropShadow(20.0D, Color.GAINSBORO));
         groupNotFound_Label.setFont(Font.font(Font.getDefault().getName(), FontWeight.BOLD, 13.0D));
@@ -1128,7 +1216,8 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
         groupNotFound_HBox.setAlignment(Pos.CENTER_RIGHT);
 
         TextField groupName_TextField = new TextField();
-        groupName_TextField.setPromptText("Enter new name of group here");
+        groupName_TextField.setPromptText(language.getProperty("groupName_promtText",
+                "Enter new name of group here"));
         groupName_TextField.setText(posixFileAttributes.group().getName());
         groupName_TextField.setOnKeyTyped(event ->
         {
@@ -1186,7 +1275,8 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
 
         Text forCalculateWidth_Text = new Text();
 
-        Label name_Label = new Label("Name");
+        Label name_Label = new Label(language.getProperty("extendedAttributeName_label",
+                "Name"));
         name_Label.setTextFill(Color.HONEYDEW);
         name_Label.setFont(Font.font(Font.getDefault().getName(), FontWeight.BOLD, 13.0D));
 
@@ -1237,7 +1327,8 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
 
 
         extendedAttributeValue_TextField = new TextField();
-        extendedAttributeValue_TextField.setPromptText("Enter new value here");
+        extendedAttributeValue_TextField.setPromptText(language.getProperty("extendedAttributeValue_promtText",
+                "Enter new value here"));
         extendedAttributeValue_TextField.setText("");
         extendedAttributeValue_TextField.textProperty().addListener((event, value1, value2) ->
         {
@@ -1247,7 +1338,8 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
             }
         });
 
-        Label value_Label = new Label("Value");
+        Label value_Label = new Label(language.getProperty("value_label",
+                "Value"));
         value_Label.setTextFill(Color.HONEYDEW);
         value_Label.setFont(Font.font(Font.getDefault().getName(), FontWeight.BOLD, 13.0D));
 
@@ -1255,7 +1347,9 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
         forCalculateWidth_Text.setFont(value_Label.getFont());
         value_Label.setMinWidth(forCalculateWidth_Text.getBoundsInParent().getWidth());
 
-        HBox name_HBox = new HBox(FM_GUI.rem * 0.85D, name_Label, attributesNames_ComboBox, deleteExtendedAttribute_Label);
+        HBox name_HBox = new HBox(FM_GUI.rem * 0.85D, name_Label, attributesNames_ComboBox,
+                deleteExtendedAttribute_Label);
+        name_HBox.setAlignment(Pos.CENTER_LEFT);
         HBox value_HBox = new HBox(FM_GUI.rem * 0.85D, value_Label, extendedAttributeValue_TextField);
 
         extendedAttributesEditorPane_VBox.getChildren().addAll(name_HBox, value_HBox);
@@ -1873,7 +1967,9 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
         fileSizeAndNumberCounterThread.start();
     }
 
-/**Предназначен для вызова из потока подсчета файлов и размера {@link org.yaldysse.fm.dialogs.SimpleFileSizeAndNumberCounter}*/
+    /**
+     * Предназначен для вызова из потока подсчета файлов и размера {@link org.yaldysse.fm.dialogs.SimpleFileSizeAndNumberCounter}
+     */
     @Override
     public void appearInNodes(int aFilesNumber, long aTotalSize)
     {

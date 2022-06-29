@@ -4,14 +4,12 @@ import javafx.application.Platform;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.LinkOption;
-import java.nio.file.NoSuchFileException;
-import java.nio.file.Path;
+import java.nio.file.*;
+import java.util.ArrayList;
 
 /**
  * Класс, описывающие роботу потока по удалению заданных файлов. Перед завершением
- * работы потока вызывается метод {@link org.yaldysse.fm.dialogs.delete.DeleteProgress#appearDeleteProgress(int, Path, boolean, boolean)},
+ * работы потока вызывается метод {@link org.yaldysse.fm.dialogs.delete.DeleteProgress#appearDeleteProgress(int, Path, boolean, boolean, ArrayList)},
  * для указанного обьекта класса, что реализовывает интерфейс {@link org.yaldysse.fm.dialogs.delete.DeleteProgress}.
  * Таким образом поток передает данные об состоянии операции классу, что реализовывает
  * этот интерфейс.
@@ -23,6 +21,7 @@ public class DeleteFiles implements Runnable
     private Path currentFilePath;
     private DeleteProgress deleteProgress;
     private boolean interrupt;
+    private ArrayList<Path> accessDeniedErrorsPath_ArrayList;
 
     public DeleteFiles(Path[] targetPaths, DeleteProgress aDeleteProgress)
     {
@@ -30,6 +29,7 @@ public class DeleteFiles implements Runnable
         deletedFiles = 0;
         deleteProgress = aDeleteProgress;
         interrupt = false;
+        accessDeniedErrorsPath_ArrayList = new ArrayList<>();
     }
 
     @Override
@@ -55,7 +55,7 @@ public class DeleteFiles implements Runnable
     {
         if (!Files.isSymbolicLink(targetFile.toPath()))
         {
-
+            currentFilePath = targetFile.toPath();
             //Переходит по символическим ссылкам
             String[] dirList = targetFile.list();
 
@@ -73,7 +73,6 @@ public class DeleteFiles implements Runnable
                     {
                         File temporaryFile = new File(targetFile + File.separator + dirList[k]);
                         currentFilePath = temporaryFile.toPath();
-                        //System.out.println(f.toString());
 
 //                if (Files.isSymbolicLink(temporaryFile.toPath()))
 //                {
@@ -89,6 +88,10 @@ public class DeleteFiles implements Runnable
                             deletedFiles++;
                             notifyAboutCurrentProgress(false, false);
                         }
+                    }
+                    catch (AccessDeniedException accessDeniedException)
+                    {
+                        accessDeniedErrorsPath_ArrayList.add(currentFilePath);
                     }
                     catch (NoSuchFileException noSuchFileException)
                     {
@@ -110,6 +113,10 @@ public class DeleteFiles implements Runnable
                 currentFilePath = targetFile.toPath();
             }
         }
+        catch (AccessDeniedException accessDeniedException)
+        {
+            accessDeniedErrorsPath_ArrayList.add(currentFilePath);
+        }
         catch (IOException ioException)
         {
             ioException.printStackTrace();
@@ -122,7 +129,7 @@ public class DeleteFiles implements Runnable
         Platform.runLater(() ->
         {
             deleteProgress.appearDeleteProgress(deletedFiles,
-                    currentFilePath, completed, interrupted);
+                    currentFilePath, completed, interrupted, accessDeniedErrorsPath_ArrayList);
         });
     }
 
