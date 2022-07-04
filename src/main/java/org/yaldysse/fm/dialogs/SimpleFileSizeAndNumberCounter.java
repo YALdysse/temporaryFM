@@ -22,6 +22,7 @@ public class SimpleFileSizeAndNumberCounter implements Runnable
     private long totalSize;
     //private DeleteFileDialog deleteFileDialog;
     private FilesNumberAndSizeCalculator guiDialog;
+    private boolean hasInterrupt;
 
     public SimpleFileSizeAndNumberCounter(final Path targetPath,
                                           FilesNumberAndSizeCalculator aGuiDialog)
@@ -29,6 +30,7 @@ public class SimpleFileSizeAndNumberCounter implements Runnable
         filesNumber = 0;
         totalSize = 0;
         guiDialog = aGuiDialog;
+        hasInterrupt = false;
         paths = new Path[1];
         paths[0] = targetPath;
     }
@@ -40,6 +42,7 @@ public class SimpleFileSizeAndNumberCounter implements Runnable
         totalSize = 0;
         paths = new Path[targetPaths.length];
         guiDialog = aGuiDialog;
+        hasInterrupt = false;
 
         for (int k = 0; k < paths.length; k++)
         {
@@ -51,10 +54,19 @@ public class SimpleFileSizeAndNumberCounter implements Runnable
     @Override
     public void run()
     {
-        for (int k = 0; k < paths.length; k++)
+        try
         {
-            walkPathsThroughListMethod(paths[k].toAbsolutePath().toFile());
+            for (int k = 0; k < paths.length; k++)
+            {
+                walkPathsThroughListMethod(paths[k].toAbsolutePath().toFile());
+            }
         }
+        catch (InterruptedException interruptedException)
+        {
+            System.out.println(interruptedException.getMessage());
+            return;
+        }
+
 
         Platform.runLater(() ->
         {
@@ -67,7 +79,7 @@ public class SimpleFileSizeAndNumberCounter implements Runnable
      * Обходит все файлы в заданном каталоге. Количество файлов и значение размера
      * записывает в соответствующие переменные.
      */
-    private void walkPathsThroughListMethod(final File targetFile)
+    private void walkPathsThroughListMethod(final File targetFile) throws InterruptedException
     {
         if (!Files.isSymbolicLink(targetFile.toPath()))
         {
@@ -102,6 +114,11 @@ public class SimpleFileSizeAndNumberCounter implements Runnable
 
             for (int k = 0; k < dirList.length; k++)
             {
+                if (hasInterrupt)
+                {
+                    throw new InterruptedException("Остановка поток подсчета файлов и их размера.");
+                }
+
                 try
                 {
                     File temporaryFile = new File(targetFile + File.separator + dirList[k]);
@@ -146,6 +163,16 @@ public class SimpleFileSizeAndNumberCounter implements Runnable
                 ioException.printStackTrace();
             }
         }
+    }
+
+    /**
+     * Устанавливает значение переменной остановки потока в true.
+     * После этого поток, когда это будет возможно прирвет исполнение
+     * через исключение.
+     */
+    public void interrupt()
+    {
+        hasInterrupt = true;
     }
 
 }

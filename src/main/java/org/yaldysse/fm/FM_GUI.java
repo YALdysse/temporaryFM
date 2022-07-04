@@ -49,6 +49,8 @@ import org.yaldysse.fm.dialogs.delete.DeleteFileDialog;
 import org.yaldysse.fm.dialogs.delete.DeleteOperationResult;
 import org.yaldysse.fm.dialogs.favorites.FavoritesDialog;
 import org.yaldysse.tools.Shell;
+import org.yaldysse.tools.StorageCapacity;
+import org.yaldysse.tools.os.windows.StorageSpaceFormatter;
 
 import javax.swing.*;
 import javax.swing.filechooser.FileSystemView;
@@ -230,7 +232,12 @@ public class FM_GUI extends Application
     private ToolBar info_ToolBar;
     private Label selectedItem_toolBarLabel;
     private Label selectedItemValue_toolBarLabel;
+    private Label selectedSize_toolBarLabel;
+    private Label selectedSizeValue_toolBarLabel;
     private FileNameTip fileNameTip;
+    private Thread totalSizeCounterForToolBar_Thread;
+    private SimpleFileSizeAndNumberCounter fileSizeCounterForToolBar;
+    private ProgressIndicator selectedSize_ProgressIndicator;
 
     @Override
     public void start(Stage primaryStage) throws Exception
@@ -803,14 +810,7 @@ public class FM_GUI extends Application
         content_TreeTableView.setOnKeyReleased(this::contentKeyReleased_Action);
         content_TreeTableView.getSortOrder().addAll(nameColumn, typeColumn);
         content_TreeTableView.getSelectionModel().selectedItemProperty().addListener(
-                (value, value1, value2) ->
-                {
-                    if (selectedItemValue_toolBarLabel != null)
-                    {
-                        selectedItemValue_toolBarLabel.setText("" + content_TreeTableView.getSelectionModel()
-                                .getSelectedItems().size());
-                    }
-                });
+                this::contentFilesTable_selectionChanged);
 
         sortType = TreeTableColumn.SortType.ASCENDING;
         lastActiveSortColumn = nameColumn;
@@ -835,7 +835,7 @@ public class FM_GUI extends Application
                 //temporaryCell.setTextFill(Color.LIGHTSKYBLUE);
 
                 temporaryCell.setTooltip(new FileNameTip(temporaryCell.getText()));
-                temporaryCell.textProperty().addListener((eventT, oldText, newText)->
+                temporaryCell.textProperty().addListener((eventT, oldText, newText) ->
                 {
                     FileNameTip temporaryFileNameTip = (FileNameTip) temporaryCell.getTooltip();
                     temporaryFileNameTip.setLabelText(newText);
@@ -973,8 +973,22 @@ public class FM_GUI extends Application
         selectedItemValue_toolBarLabel = new Label();
         selectedItemValue_toolBarLabel.setFont(Font.font(11.0D));
 
+        selectedSize_toolBarLabel = new Label(currentLanguage.getProperty("size_str",
+                "Size:"));
+        selectedSize_toolBarLabel.setVisible(false);
+        selectedSize_toolBarLabel.setFont(selectedItem_toolBarLabel.getFont());
+
+        selectedSizeValue_toolBarLabel = new Label();
+        selectedSizeValue_toolBarLabel.setVisible(false);
+        selectedSizeValue_toolBarLabel.setFont(selectedItemValue_toolBarLabel.getFont());
+
+        selectedSize_ProgressIndicator = new ProgressIndicator();
+        selectedSize_ProgressIndicator.setPrefHeight(selectedSize_toolBarLabel
+                .getBoundsInParent().getHeight());
+
         info_ToolBar.getItems().addAll(selectedItem_toolBarLabel, selectedItemValue_toolBarLabel,
-                new Separator(Orientation.VERTICAL));
+                new Separator(Orientation.VERTICAL), selectedSize_toolBarLabel,
+                selectedSizeValue_toolBarLabel, new Separator(Orientation.VERTICAL));
 
         content_VBox = new VBox(rem * 0.45D);
         content_VBox.setPadding(new Insets(rem * 0.15D, rem * 0.7D, rem * 0.7D, rem * 0.7D));
@@ -987,7 +1001,9 @@ public class FM_GUI extends Application
 
     }
 
-    /**@deprecated Не надежный метод. Хорошо работает с Linux, но плохо с Win.*/
+    /**
+     * @deprecated Не надежный метод. Хорошо работает с Linux, но плохо с Win.
+     */
     private void goToFileStoragesPane()
     {
         fileStorages_FlowPane.getChildren().clear();
@@ -1642,7 +1658,7 @@ public class FM_GUI extends Application
         else if (keyRelease_KeyCode == KeyCode.F11)
         {
 
-            for(File f : File.listRoots())
+            for (File f : File.listRoots())
             {
                 System.out.println(f.getAbsolutePath());
 //                try
@@ -2867,6 +2883,8 @@ public class FM_GUI extends Application
         newTreeTableView.setRoot(new TreeItem<>(new FileData("Root", 8192)));
         newTreeTableView.setShowRoot(false);
         newTreeTableView.getSortOrder().addAll(newNameColumn, newTypeColumn);
+        newTreeTableView.getSelectionModel().selectedItemProperty().addListener(
+                this::contentFilesTable_selectionChanged);
 
         VBox files_VBox = new VBox(rem * 0.45D);
         files_VBox.getChildren().add(newTreeTableView);
@@ -3607,7 +3625,8 @@ public class FM_GUI extends Application
 
         selectedItem_toolBarLabel.setText(currentLanguage.getProperty("selectedItems_str",
                 "Selected:"));
-
+        selectedSize_toolBarLabel.setText(currentLanguage.getProperty("size_str",
+                "Size:"));
     }
 
     private void addToFavorites_Action(ActionEvent event)
@@ -3741,13 +3760,86 @@ public class FM_GUI extends Application
 
     private void currentPathTextField_Focus(Observable observable)
     {
-        if (!currentPath_TextField.isFocused() && currentPath!=null
-        && currentPath.size() > currentContentTabIndex &&
-                currentPath.get(currentContentTabIndex)!=null)
+        if (!currentPath_TextField.isFocused() && currentPath != null
+                && currentPath.size() > currentContentTabIndex &&
+                currentPath.get(currentContentTabIndex) != null)
         {
             currentPath_TextField.setText(currentPath.get(currentContentTabIndex)
                     .toAbsolutePath().toString());
         }
+    }
+
+    private void contentFilesTable_selectionChanged(ObservableValue<?> oValue, TreeItem<FileData> value1,
+                                                    TreeItem<FileData> value2)
+    {
+        if (selectedItemValue_toolBarLabel != null)
+        {
+            selectedItemValue_toolBarLabel.setText("" + activatedTreeTableView.getSelectionModel()
+                    .getSelectedItems().size());
+        }
+
+        createAndStartSelectedFilesSizeThreadForInfoToolBar();
+    }
+
+
+    public void createAndStartSelectedFilesSizeThreadForInfoToolBar()
+    {
+        FilesNumberAndSizeCalculator totalSizeForToolBarChanger = new FilesNumberAndSizeCalculator()
+        {
+            @Override
+            public void appearInNodes(int aFilesNumber, long aTotalSize)
+            {
+                if (!selectedSize_toolBarLabel.isVisible())
+                {
+                    selectedSize_toolBarLabel.setVisible(true);
+                    selectedSizeValue_toolBarLabel.setVisible(true);
+                }
+
+                selectedSizeValue_toolBarLabel.setText(StorageCapacity.ofBytes(aTotalSize)
+                        .getSpace(StorageSpaceFormatter.ONLY_BIGGEST_VALUE_FORMAT));
+
+                info_ToolBar.getItems().remove(selectedSize_ProgressIndicator);
+                {
+                    selectedSize_toolBarLabel.setVisible(true);
+                    selectedSizeValue_toolBarLabel.setVisible(true);
+                }
+            }
+        };
+
+
+        if (fileSizeCounterForToolBar != null &&
+                totalSizeCounterForToolBar_Thread.isAlive())
+        {
+            fileSizeCounterForToolBar.interrupt();
+        }
+
+        //Подготовить файлы
+        ObservableList<TreeItem<FileData>> items = activatedTreeTableView.getSelectionModel()
+                .getSelectedItems();
+
+        Path[] targetPaths = new Path[items.size()];
+        Path temporaryCurrentPath = currentPath.get(currentContentTabIndex);
+
+        for (int k = 0; k < targetPaths.length; k++)
+        {
+            targetPaths[k] = temporaryCurrentPath.resolve(items.get(k).getValue()
+                    .getName());
+        }
+
+        fileSizeCounterForToolBar = new SimpleFileSizeAndNumberCounter(targetPaths,
+                totalSizeForToolBarChanger);
+
+        totalSizeCounterForToolBar_Thread = new Thread(fileSizeCounterForToolBar);
+        totalSizeCounterForToolBar_Thread.start();
+
+        if (!info_ToolBar.getItems().contains(selectedSize_ProgressIndicator))
+        {
+            selectedSize_toolBarLabel.setVisible(false);
+            selectedSizeValue_toolBarLabel.setVisible(false);
+            info_ToolBar.getItems().add(info_ToolBar.getItems().indexOf(selectedSize_toolBarLabel),
+                    selectedSize_ProgressIndicator);
+        }
+
     }
 
 }

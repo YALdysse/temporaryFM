@@ -5,6 +5,7 @@
 <!-- -->
 <entry key="nameOfFileHasBeenSuccessfullyCopied_str">Назва файлу скопійована.</entry>
 <entry key="selectedItems_str">Обрано:</entry>
+<entry key="size_str">Розмір:</entry>
 <entry key="removeFromFavorites_str">Видалити з уподобань</entry>
 <entry key="goToFile_str">Перейти до файлу</entry>
 <!--File-->
