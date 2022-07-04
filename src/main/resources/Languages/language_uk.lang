@@ -5,6 +5,8 @@
 <!-- -->
 <entry key="nameOfFileHasBeenSuccessfullyCopied_str">Назва файлу скопійована.</entry>
 <entry key="selectedItems_str">Обрано:</entry>
+<entry key="removeFromFavorites_str">Видалити з уподобань</entry>
+<entry key="goToFile_str">Перейти до файлу</entry>
 <!--File-->
 <entry key="file_menu">Головне</entry>
 <entry key="createNewTab_menuItem">Створити нову вкладку</entry>

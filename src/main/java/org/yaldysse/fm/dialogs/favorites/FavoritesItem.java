@@ -3,15 +3,14 @@ package org.yaldysse.fm.dialogs.favorites;
 import javafx.geometry.Insets;
 import javafx.geometry.Orientation;
 import javafx.geometry.Pos;
-import javafx.scene.control.Button;
-import javafx.scene.control.ContentDisplay;
-import javafx.scene.control.Label;
-import javafx.scene.control.Separator;
+import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import org.yaldysse.fm.FM_GUI;
+import org.yaldysse.fm.FileNameTip;
+
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
@@ -58,6 +57,9 @@ public class FavoritesItem extends VBox
                 FontWeight.BOLD, 26.0D);
 
         goToFile_Button = new Label("➤");
+        goToFile_Button.setTooltip(new FileNameTip(
+                language.getProperty("goToFile_str",
+                        "Go to file")));
         goToFile_Button.setFont(buttonFont);
         goToFile_Button.setContentDisplay(ContentDisplay.TEXT_ONLY);
         goToFile_Button.setOnMouseEntered(event ->
@@ -70,6 +72,9 @@ public class FavoritesItem extends VBox
         });
 
         removeFromFavorites_Button = new Label("✘");
+        removeFromFavorites_Button.setTooltip(new FileNameTip(
+                language.getProperty("removeFromFavorites_str",
+                "Remove from favorites")));
         removeFromFavorites_Button.setFont(buttonFont);
         removeFromFavorites_Button.setTextFill(Color.BLACK);
         removeFromFavorites_Button.setContentDisplay(ContentDisplay.TEXT_ONLY);
@@ -83,6 +88,9 @@ public class FavoritesItem extends VBox
         });
 
         attributes_Button = new Label("Ã");
+        attributes_Button.setTooltip(new FileNameTip(
+                language.getProperty("attributes_menuItem",
+                        "Attributes")));
         attributes_Button.setFont(buttonFont);
         attributes_Button.setContentDisplay(ContentDisplay.TEXT_ONLY);
         attributes_Button.setOnMouseEntered(event ->

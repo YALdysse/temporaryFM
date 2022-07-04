@@ -38,6 +38,7 @@ import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
 import javafx.scene.text.Text;
 import javafx.stage.*;
+import javafx.stage.Popup;
 import javafx.stage.Window;
 import javafx.util.Callback;
 import javafx.util.Duration;
@@ -49,6 +50,8 @@ import org.yaldysse.fm.dialogs.delete.DeleteOperationResult;
 import org.yaldysse.fm.dialogs.favorites.FavoritesDialog;
 import org.yaldysse.tools.Shell;
 
+import javax.swing.*;
+import javax.swing.filechooser.FileSystemView;
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
@@ -227,6 +230,7 @@ public class FM_GUI extends Application
     private ToolBar info_ToolBar;
     private Label selectedItem_toolBarLabel;
     private Label selectedItemValue_toolBarLabel;
+    private FileNameTip fileNameTip;
 
     @Override
     public void start(Stage primaryStage) throws Exception
@@ -829,6 +833,13 @@ public class FM_GUI extends Application
             {
                 CustomTreeTableCell<FileData, String> temporaryCell = new CustomTreeTableCell<>();
                 //temporaryCell.setTextFill(Color.LIGHTSKYBLUE);
+
+                temporaryCell.setTooltip(new FileNameTip(temporaryCell.getText()));
+                temporaryCell.textProperty().addListener((eventT, oldText, newText)->
+                {
+                    FileNameTip temporaryFileNameTip = (FileNameTip) temporaryCell.getTooltip();
+                    temporaryFileNameTip.setLabelText(newText);
+                });
                 temporaryCell.setFont(cellFont);
                 temporaryCell.setPadding(new Insets(0.0D, 0.0D, 0.0, rem * 0.2D));
                 temporaryCell.setOnMouseClicked(mouseClickEvent);
@@ -1630,6 +1641,7 @@ public class FM_GUI extends Application
         }
         else if (keyRelease_KeyCode == KeyCode.F11)
         {
+
             for(File f : File.listRoots())
             {
                 System.out.println(f.getAbsolutePath());
