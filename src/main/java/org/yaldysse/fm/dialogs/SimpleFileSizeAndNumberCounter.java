@@ -1,7 +1,6 @@
 package org.yaldysse.fm.dialogs;
 
 import javafx.application.Platform;
-
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -17,10 +16,11 @@ import java.nio.file.Path;
  */
 public class SimpleFileSizeAndNumberCounter implements Runnable
 {
-    private Path[] paths;
+    private final Path[] paths;
     private int filesNumber;
     private long totalSize;
-    //private DeleteFileDialog deleteFileDialog;
+    private int regularFilesNumber;
+    private int directoriesNumber;
     private FilesNumberAndSizeCalculator guiDialog;
     private boolean hasInterrupt;
 
@@ -29,6 +29,8 @@ public class SimpleFileSizeAndNumberCounter implements Runnable
     {
         filesNumber = 0;
         totalSize = 0;
+        regularFilesNumber = 0;
+        directoriesNumber = 0;
         guiDialog = aGuiDialog;
         hasInterrupt = false;
         paths = new Path[1];
@@ -40,6 +42,8 @@ public class SimpleFileSizeAndNumberCounter implements Runnable
     {
         filesNumber = 0;
         totalSize = 0;
+        regularFilesNumber = 0;
+        directoriesNumber = 0;
         paths = new Path[targetPaths.length];
         guiDialog = aGuiDialog;
         hasInterrupt = false;
@@ -71,6 +75,8 @@ public class SimpleFileSizeAndNumberCounter implements Runnable
         Platform.runLater(() ->
         {
             guiDialog.appearInNodes(filesNumber, totalSize);
+            guiDialog.appearInNodes(filesNumber,regularFilesNumber,directoriesNumber,
+                    totalSize);
         });
     }
 
@@ -91,17 +97,20 @@ public class SimpleFileSizeAndNumberCounter implements Runnable
                 {
                     //это файл
                     filesNumber++;
+                    regularFilesNumber++;
                     totalSize += Files.size(targetFile.toPath());
                     return;
                 }
                 else if (dirList.length == 0)//пустой каталог
                 {
                     filesNumber++;
+                    directoriesNumber++;
                     totalSize += Files.size(targetFile.toPath());
                     return;
                 }
                 else
                 {
+                    directoriesNumber++;
                     filesNumber++;
                     totalSize += Files.size(targetFile.toPath());
                 }
@@ -126,6 +135,7 @@ public class SimpleFileSizeAndNumberCounter implements Runnable
 
                     if (Files.isSymbolicLink(temporaryFile.toPath()))
                     {
+                        regularFilesNumber++;
                         filesNumber++;
                         //System.out.println("Пропускаем : "+ temporaryFile);
                         continue;
@@ -136,6 +146,7 @@ public class SimpleFileSizeAndNumberCounter implements Runnable
                     }
                     else
                     {
+                        regularFilesNumber++;
                         filesNumber++;
                         totalSize += Files.size(temporaryFile.toPath());
                     }
@@ -155,6 +166,7 @@ public class SimpleFileSizeAndNumberCounter implements Runnable
         {
             try
             {
+                regularFilesNumber++;
                 totalSize += Files.size(targetFile.toPath());
                 filesNumber++;
             }
@@ -167,12 +179,27 @@ public class SimpleFileSizeAndNumberCounter implements Runnable
 
     /**
      * Устанавливает значение переменной остановки потока в true.
-     * После этого поток, когда это будет возможно прирвет исполнение
+     * После этого поток, когда это будет возможно прервет исполнение
      * через исключение.
      */
     public void interrupt()
     {
         hasInterrupt = true;
+    }
+
+    public int getRegularFilesNumber()
+    {
+        return regularFilesNumber;
+    }
+
+    public int getDirectoriesNumber()
+    {
+        return directoriesNumber;
+    }
+
+    public int getTotalFiles()
+    {
+        return filesNumber;
     }
 
 }

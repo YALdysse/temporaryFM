@@ -61,6 +61,7 @@ import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.nio.file.attribute.*;
+import java.text.NumberFormat;
 import java.time.*;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -234,6 +235,10 @@ public class FM_GUI extends Application
     private Label selectedItemValue_toolBarLabel;
     private Label selectedSize_toolBarLabel;
     private Label selectedSizeValue_toolBarLabel;
+    private Label selectedRegularFiles_toolBarLabel;
+    private Label selectedRegularFilesValue_toolBarLabel;
+    private Label selectedDirectories_toolBarLabel;
+    private Label selectedDirectoriesValue_toolBarLabel;
     private FileNameTip fileNameTip;
     private Thread totalSizeCounterForToolBar_Thread;
     private SimpleFileSizeAndNumberCounter fileSizeCounterForToolBar;
@@ -986,9 +991,33 @@ public class FM_GUI extends Application
         selectedSize_ProgressIndicator.setPrefHeight(selectedSize_toolBarLabel
                 .getBoundsInParent().getHeight());
 
+        selectedRegularFiles_toolBarLabel = new Label("📄");
+        selectedRegularFiles_toolBarLabel.setVisible(false);
+        selectedRegularFiles_toolBarLabel.setFont(selectedSize_toolBarLabel.getFont());
+        selectedRegularFiles_toolBarLabel.setTooltip(new FileNameTip("Files"));
+
+        selectedRegularFilesValue_toolBarLabel = new Label();
+        selectedRegularFilesValue_toolBarLabel.setVisible(false);
+        selectedRegularFilesValue_toolBarLabel.setFont(selectedSizeValue_toolBarLabel.getFont());
+        selectedRegularFilesValue_toolBarLabel.setTooltip(new FileNameTip("Files"));
+
+        selectedDirectories_toolBarLabel = new Label("\uD83D\uDCC2");
+        selectedDirectories_toolBarLabel.setVisible(false);
+        selectedDirectories_toolBarLabel.setFont(selectedSize_toolBarLabel.getFont());
+        selectedDirectories_toolBarLabel.setTooltip(new FileNameTip("Directories"));
+
+        selectedDirectoriesValue_toolBarLabel = new Label();
+        selectedDirectoriesValue_toolBarLabel.setVisible(false);
+        selectedDirectoriesValue_toolBarLabel.setFont(selectedSizeValue_toolBarLabel.getFont());
+        selectedDirectoriesValue_toolBarLabel.setTooltip(new FileNameTip("Directories"));
+
+
         info_ToolBar.getItems().addAll(selectedItem_toolBarLabel, selectedItemValue_toolBarLabel,
                 new Separator(Orientation.VERTICAL), selectedSize_toolBarLabel,
-                selectedSizeValue_toolBarLabel, new Separator(Orientation.VERTICAL));
+                selectedSizeValue_toolBarLabel, new Separator(Orientation.VERTICAL),
+                selectedRegularFiles_toolBarLabel,selectedRegularFilesValue_toolBarLabel,
+                selectedDirectories_toolBarLabel,selectedDirectoriesValue_toolBarLabel,
+                new Separator(Orientation.VERTICAL));
 
         content_VBox = new VBox(rem * 0.45D);
         content_VBox.setPadding(new Insets(rem * 0.15D, rem * 0.7D, rem * 0.7D, rem * 0.7D));
@@ -3567,6 +3596,7 @@ public class FM_GUI extends Application
         copyAbsoluteNamePath_MenuItem.setText(currentLanguage.getProperty("copyAbsolutePath_meuItem", "Copy absolute path of file"));
         openTerminalHere_MenuItem.setText(currentLanguage.getProperty("openTerminalHere_menuItem", "Open terminal here"));
         openInNewTab_MenuItem.setText(currentLanguage.getProperty("openInNewTab_menuItem", "Open in new tab"));
+        favoritesDialog_MenuItem.setText(currentLanguage.getProperty("favorites_menuItem","Favorites files"));
         language_Menu.setText(currentLanguage.getProperty("language_menu", "Language"));
         exit_MenuItem.setText(currentLanguage.getProperty("exit_menuItem", "Exit"));
 
@@ -3789,6 +3819,13 @@ public class FM_GUI extends Application
             @Override
             public void appearInNodes(int aFilesNumber, long aTotalSize)
             {
+
+            }
+
+            @Override
+            public void appearInNodes(int aFilesNumber, int aRegularFilesNumber,
+                                      int aDirectoriesNumber, long aTotalSize)
+            {
                 if (!selectedSize_toolBarLabel.isVisible())
                 {
                     selectedSize_toolBarLabel.setVisible(true);
@@ -3797,11 +3834,19 @@ public class FM_GUI extends Application
 
                 selectedSizeValue_toolBarLabel.setText(StorageCapacity.ofBytes(aTotalSize)
                         .getSpace(StorageSpaceFormatter.ONLY_BIGGEST_VALUE_FORMAT));
+                selectedRegularFilesValue_toolBarLabel.setText("" + NumberFormat.getNumberInstance()
+                        .format(aRegularFilesNumber));
+                selectedDirectoriesValue_toolBarLabel.setText("" + NumberFormat.getNumberInstance()
+                        .format(aDirectoriesNumber));
 
                 info_ToolBar.getItems().remove(selectedSize_ProgressIndicator);
                 {
                     selectedSize_toolBarLabel.setVisible(true);
                     selectedSizeValue_toolBarLabel.setVisible(true);
+                    selectedRegularFiles_toolBarLabel.setVisible(true);
+                    selectedRegularFilesValue_toolBarLabel.setVisible(true);
+                    selectedDirectories_toolBarLabel.setVisible(true);
+                    selectedDirectoriesValue_toolBarLabel.setVisible(true);
                 }
             }
         };
@@ -3836,6 +3881,10 @@ public class FM_GUI extends Application
         {
             selectedSize_toolBarLabel.setVisible(false);
             selectedSizeValue_toolBarLabel.setVisible(false);
+            selectedRegularFiles_toolBarLabel.setVisible(false);
+            selectedRegularFilesValue_toolBarLabel.setVisible(false);
+            selectedDirectories_toolBarLabel.setVisible(false);
+            selectedDirectoriesValue_toolBarLabel.setVisible(false);
             info_ToolBar.getItems().add(info_ToolBar.getItems().indexOf(selectedSize_toolBarLabel),
                     selectedSize_ProgressIndicator);
         }
