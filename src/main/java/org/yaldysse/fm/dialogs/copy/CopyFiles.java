@@ -4,7 +4,11 @@ import javafx.application.Platform;
 import org.yaldysse.fm.dialogs.ConfirmDialogButtonType;
 
 import java.io.*;
+import java.nio.ByteBuffer;
 import java.nio.file.*;
+import java.nio.file.attribute.BasicFileAttributeView;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.nio.file.attribute.UserDefinedFileAttributeView;
 import java.util.Timer;
 import java.util.TimerTask;
 
@@ -36,6 +40,7 @@ public class CopyFiles implements Runnable
     public final int timerDelay = 1;
     public final int timerPeriod = 1000;
     private boolean removeFilesAfterCopy;
+    private boolean copyAttributes;
 
     public CopyFiles(final Path[] targetPaths, final Path[] aDestinationPaths,
                      CopyOperationProgress aCopyProgress, final boolean removeFiles)
@@ -47,6 +52,7 @@ public class CopyFiles implements Runnable
         finishedFilesNumber = 0;
         copyOperationProgress = aCopyProgress;
         interrupt = false;
+        copyAttributes = true;
         currentCopyOption = ConfirmDialogButtonType.ASK_ME;
         removeFilesAfterCopy = removeFiles;
         //forLock = new Object();
@@ -185,6 +191,10 @@ public class CopyFiles implements Runnable
                 }
 
                 copyFileUsingIOStream(sourceFile, destinationFile);
+                if (copyAttributes)
+                {
+                    copyAttributes(sourceFile.toPath(), destinationFile.toPath());
+                }
 
                 if (removeFilesAfterCopy)
                 {
@@ -198,6 +208,11 @@ public class CopyFiles implements Runnable
                         currentCopyOption != ConfirmDialogButtonType.UNITE_ALL)
                 {
                     Files.createDirectory(destinationFile.toPath());
+                }
+
+                if (copyAttributes)
+                {
+                    copyAttributes(sourceFile.toPath(), destinationFile.toPath());
                 }
 
                 copiedFilesNumber++;
@@ -271,6 +286,39 @@ public class CopyFiles implements Runnable
             ioException.printStackTrace();
         }
         System.out.println("Файл " + destinationFile.toPath() + " должен быть успешно скопирован.");
+    }
+
+
+    /**
+     * Копирует аттрибуты времени и расширенные аттрибуты.
+     */
+    private void copyAttributes(final Path sourceFile, final Path targetFile) throws IOException
+    {
+        BasicFileAttributeView basicFileAttributeView_source = Files.getFileAttributeView(sourceFile, BasicFileAttributeView.class,
+                LinkOption.NOFOLLOW_LINKS);
+        BasicFileAttributeView basicFileAttributeView_target = Files.getFileAttributeView(targetFile, BasicFileAttributeView.class,
+                LinkOption.NOFOLLOW_LINKS);
+
+        BasicFileAttributes basicFileAttributes_source = basicFileAttributeView_source.readAttributes();
+        basicFileAttributeView_target.setTimes(basicFileAttributes_source.lastModifiedTime(),
+                basicFileAttributes_source.lastAccessTime(), basicFileAttributes_source.creationTime());
+
+
+        UserDefinedFileAttributeView extendedAttributes_source = Files.getFileAttributeView(sourceFile,
+                UserDefinedFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
+        UserDefinedFileAttributeView extendedAttributes_target = Files.getFileAttributeView(targetFile,
+                UserDefinedFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
+
+        ByteBuffer byteBuffer = null;
+
+        for (String temporaryAttributeName : extendedAttributes_source.list())
+        {
+            byteBuffer = ByteBuffer.allocate(extendedAttributes_source.size(temporaryAttributeName));
+            extendedAttributes_source.read(temporaryAttributeName, byteBuffer);
+            byteBuffer.flip();
+            extendedAttributes_target.write(temporaryAttributeName, byteBuffer);
+            byteBuffer.clear();
+        }
     }
 
     private void notifyAboutCurrentProgress(final boolean completed,
