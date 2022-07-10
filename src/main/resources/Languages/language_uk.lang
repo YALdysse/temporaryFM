@@ -8,6 +8,7 @@
 <entry key="size_str">Розмір:</entry>
 <entry key="removeFromFavorites_str">Видалити з уподобань</entry>
 <entry key="goToFile_str">Перейти до файлу</entry>
+<entry key="enterChecksumHere_str">Введіть сюди контрольну суму</entry>
 <!--File-->
 <entry key="file_menu">Головне</entry>
 <entry key="createNewTab_menuItem">Створити нову вкладку</entry>
@@ -30,6 +31,7 @@
 <entry key="rename_menuItem">Змінити назву</entry>
 <entry key="delete_menuItem">Видалити</entry>
 <entry key="deleteFile">Видалити файл</entry>
+<entry key="checksum_menuItem">Контрольні суми</entry>
 <!--Go to-->
 <entry key="goTo_menu">Перейти до...</entry>
 <entry key="goToRootDirectories_menuItem">Списку розділів</entry>
@@ -134,4 +136,6 @@
 <entry key="deletingOperationWithErrors_str">Видалення файлів завешено з помилками.</entry>
 <entry key="deletingFilesHaveBeenCompleted_str">Видалення файлів успішно завершено.</entry>
 <entry key="accessDenied_str">Доступ обмежено</entry>
+<!--ChecksumChecker Dialog-->
+<entry key="checksum_label">Контрольна сума</entry>
 </properties>

@@ -3,13 +3,10 @@ package org.yaldysse.fm;
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
 import javafx.application.Application;
-import javafx.application.HostServices;
 import javafx.application.Platform;
-import javafx.beans.InvalidationListener;
 import javafx.beans.Observable;
 import javafx.beans.property.ReadOnlyObjectWrapper;
 import javafx.beans.property.ReadOnlyStringWrapper;
-import javafx.beans.value.ChangeListener;
 import javafx.beans.value.ObservableValue;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -42,7 +39,6 @@ import javafx.stage.Popup;
 import javafx.stage.Window;
 import javafx.util.Callback;
 import javafx.util.Duration;
-import org.apache.commons.io.FilenameUtils;
 import org.yaldysse.fm.dialogs.*;
 import org.yaldysse.fm.dialogs.copy.CopyFilesDialog;
 import org.yaldysse.fm.dialogs.delete.DeleteFileDialog;
@@ -50,13 +46,10 @@ import org.yaldysse.fm.dialogs.delete.DeleteOperationResult;
 import org.yaldysse.fm.dialogs.favorites.FavoritesDialog;
 import org.yaldysse.tools.Shell;
 import org.yaldysse.tools.StorageCapacity;
-import org.yaldysse.tools.os.windows.StorageSpaceFormatter;
+import org.yaldysse.tools.StorageSpaceFormatter;
 
-import javax.swing.*;
-import javax.swing.filechooser.FileSystemView;
 import java.io.File;
 import java.io.IOException;
-import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
@@ -73,8 +66,6 @@ import java.util.stream.Stream;
  * Нужно сделать:
  * 3 [Функционал]: Редактор аттрибутов.
  * 4 [Функционал]: Авто обновление таблицы файлов.
- * 5 [Функционал]: Реализовать возврат предыдущего выделения при переходе в родительский каталог,
- * но только на один уровень.
  * 6: Вспливающие подсказки
  */
 public class FM_GUI extends Application
@@ -86,7 +77,6 @@ public class FM_GUI extends Application
     private BorderPane menu_BorderPane;
     private TextField currentPath_TextField;
     private TreeTableCell<FileData, String> treeTableCell;
-    private TreeItem<FileData> rootItem;
     private ContextMenu contextMenuForColums;
     private TabPane content_TabPane;
     private TreeTableView<FileData> activatedTreeTableView;
@@ -111,8 +101,8 @@ public class FM_GUI extends Application
 
 
     public static final double rem = new Text("").getBoundsInParent().getHeight();
-    private double preferredWidth = rem * 27.0D;
-    private double preferredHeight = rem * 22.0D;
+    public final double preferredWidth = rem * 27.0D;
+    public final double preferredHeight = rem * 22.0D;
     public final String FIlE_STORES_PATH = "file stores:///";
     private String languagePath;
     private ArrayList<Path> currentPath;
@@ -187,6 +177,8 @@ public class FM_GUI extends Application
     private MenuItem deleteFile_contextMenuForFilesItem;
     private MenuItem pasteFileFromClipboard_contextMenuForFilesItem;
     private MenuItem addToFavorites_contextMenuForFilesItem;
+    private MenuItem checksum_MenuItem;
+    private MenuItem checksum_contextMenuForFilesItem;
 
 
     private CheckMenuItem autoSizeColumn_MenuItem;
@@ -615,7 +607,13 @@ public class FM_GUI extends Application
         showOrEditAttributes_MenuItem.setAccelerator(new KeyCodeCombination(KeyCode.F4));
         showOrEditAttributes_MenuItem.setOnAction(this::showOrEditAttributes_Action);
 
-        edit_Menu.getItems().addAll(showOrEditAttributes_MenuItem, new SeparatorMenuItem(),
+        checksum_MenuItem = new MenuItem(currentLanguage.getProperty("checksum_menuItem",
+                "Checksum..."));
+        checksum_MenuItem.setAccelerator(new KeyCodeCombination(KeyCode.H,KeyCombination.CONTROL_DOWN));
+        checksum_MenuItem.setOnAction(this::checkSum_Action);
+
+        edit_Menu.getItems().addAll(showOrEditAttributes_MenuItem, checksum_MenuItem,
+                new SeparatorMenuItem(),
                 createFile_MenuItem, createDirectory_MenuItem, createSymbolicLink_MenuItem,
                 new SeparatorMenuItem(), copy_MenuItem, move_MenuItem, paste_MenuItem,
                 new SeparatorMenuItem(), rename_MenuItem, delete_MenuItem);
@@ -785,7 +783,7 @@ public class FM_GUI extends Application
         isDirectoryColumn.setCellValueFactory((TreeTableColumn.CellDataFeatures<FileData, Short> param) ->
                 new ReadOnlyObjectWrapper<>(param.getValue().getValue().isDirectory(true)));
 
-        rootItem = new TreeItem<>(new FileData("root", 4096L));
+        TreeItem<FileData> rootItem = new TreeItem<>(new FileData("root", 4096L));
 
         TreeTableView<FileData> content_TreeTableView = new TreeTableView<>();
 
@@ -1015,8 +1013,8 @@ public class FM_GUI extends Application
         info_ToolBar.getItems().addAll(selectedItem_toolBarLabel, selectedItemValue_toolBarLabel,
                 new Separator(Orientation.VERTICAL), selectedSize_toolBarLabel,
                 selectedSizeValue_toolBarLabel, new Separator(Orientation.VERTICAL),
-                selectedRegularFiles_toolBarLabel,selectedRegularFilesValue_toolBarLabel,
-                selectedDirectories_toolBarLabel,selectedDirectoriesValue_toolBarLabel,
+                selectedRegularFiles_toolBarLabel, selectedRegularFilesValue_toolBarLabel,
+                selectedDirectories_toolBarLabel, selectedDirectoriesValue_toolBarLabel,
                 new Separator(Orientation.VERTICAL));
 
         content_VBox = new VBox(rem * 0.45D);
@@ -1290,12 +1288,15 @@ public class FM_GUI extends Application
                 .getProperty("addToFavorites_contextMenuForFilesItem", "Add to favorites"));
         addToFavorites_contextMenuForFilesItem.setOnAction(this::addToFavorites_Action);
 
+        checksum_contextMenuForFilesItem = new MenuItem(checksum_MenuItem.getText());
+        checksum_contextMenuForFilesItem.setOnAction(this::checkSum_Action);
+
         contextMenuForFiles.getItems().addAll(openInDefaultProgram_contextMenuForFilesItem, openWith_Menu,
                 openInNewTab_contextMenuForFilesItem, new SeparatorMenuItem(),
                 createFile_contextMenuForFilesItem,
                 createDirectory_contextMenuForFilesItem, createSymbolicLink_contextMenuForFilesItem,
-                new SeparatorMenuItem(), addToFavorites_contextMenuForFilesItem,
-                new SeparatorMenuItem(),
+                new SeparatorMenuItem(), checksum_contextMenuForFilesItem,
+                addToFavorites_contextMenuForFilesItem, new SeparatorMenuItem(),
                 copyFileToClipboard_contextMenuForFilesItem,
                 moveFilesToClipboard_contextMenuForFilesItem, pasteFileFromClipboard_contextMenuForFilesItem,
                 renameFile_contextMenuForFilesItem,
@@ -1686,6 +1687,17 @@ public class FM_GUI extends Application
         }
         else if (keyRelease_KeyCode == KeyCode.F11)
         {
+//            try
+//            {
+////                String check = ChecksumCalculator.(new BufferedInputStream(
+////                        Files.newInputStream(tttt)), CheckSumAlgorithms.SHA256.SHA256);
+////                System.out.println("SHA256: " + check);
+//            }
+//            catch(IOException ioException)
+//            {
+//                ioException.printStackTrace();
+//            }
+
 
             for (File f : File.listRoots())
             {
@@ -3388,6 +3400,7 @@ public class FM_GUI extends Application
         {
             //openInCustomProgram_contextMenuForFilesItem.setVisible(false);
             openWith_Menu.setVisible(false);
+            checksum_contextMenuForFilesItem.setVisible(false);
         }
         else
         {
@@ -3395,6 +3408,7 @@ public class FM_GUI extends Application
             {
                 //openInCustomProgram_contextMenuForFilesItem.setVisible(true);
                 openWith_Menu.setVisible(true);
+                checksum_contextMenuForFilesItem.setVisible(true);
             }
         }
     }
@@ -3596,7 +3610,7 @@ public class FM_GUI extends Application
         copyAbsoluteNamePath_MenuItem.setText(currentLanguage.getProperty("copyAbsolutePath_meuItem", "Copy absolute path of file"));
         openTerminalHere_MenuItem.setText(currentLanguage.getProperty("openTerminalHere_menuItem", "Open terminal here"));
         openInNewTab_MenuItem.setText(currentLanguage.getProperty("openInNewTab_menuItem", "Open in new tab"));
-        favoritesDialog_MenuItem.setText(currentLanguage.getProperty("favorites_menuItem","Favorites files"));
+        favoritesDialog_MenuItem.setText(currentLanguage.getProperty("favorites_menuItem", "Favorites files"));
         language_Menu.setText(currentLanguage.getProperty("language_menu", "Language"));
         exit_MenuItem.setText(currentLanguage.getProperty("exit_menuItem", "Exit"));
 
@@ -3610,6 +3624,7 @@ public class FM_GUI extends Application
         paste_MenuItem.setText(currentLanguage.getProperty("paste_menuItem", "Paste"));
         move_MenuItem.setText(currentLanguage.getProperty("move_menuItem", "Move"));
         showOrEditAttributes_MenuItem.setText(currentLanguage.getProperty("attributes_menuItem", "Attributes"));
+        checksum_MenuItem.setText(currentLanguage.getProperty("checksum_menuItem","Checksum"));
 
         goTo_Menu.setText(currentLanguage.getProperty("goTo_menu", "Go to..."));
         goToPreviousTab_MenuItem.setText(currentLanguage.getProperty("goToPreviousTab_menuItem", "Previous tab"));
@@ -3778,11 +3793,12 @@ public class FM_GUI extends Application
 
         if (StandardWatchEventKinds.ENTRY_CREATE.equals(kind))
         {
-            System.out.println("Добавляем файл ибо услышали.");
+            System.out.println("Добавляем строку ибо услышали.");
             addRowToTreeTable(currentPath.get(currentContentTabIndex).resolve(eventPath));
         }
         else if (StandardWatchEventKinds.ENTRY_DELETE.equals(kind))
         {
+            System.out.println("Удаляем строку ибо услышали.");
             removeRowByName(eventPath.toString());
         }
     }
@@ -3889,6 +3905,13 @@ public class FM_GUI extends Application
                     selectedSize_ProgressIndicator);
         }
 
+    }
+
+    private void checkSum_Action(ActionEvent event)
+    {
+        Path temporarySelectedFilePath = currentPath.get(currentContentTabIndex).resolve(activatedTreeTableView.getSelectionModel()
+                .getSelectedItem().getValue().getName());
+        new ChecksumCheckerDialog(temporarySelectedFilePath, currentLanguage).show();
     }
 
 }

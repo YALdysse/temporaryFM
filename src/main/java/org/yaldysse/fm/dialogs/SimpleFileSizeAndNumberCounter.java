@@ -1,6 +1,7 @@
 package org.yaldysse.fm.dialogs;
 
 import javafx.application.Platform;
+
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -75,7 +76,7 @@ public class SimpleFileSizeAndNumberCounter implements Runnable
         Platform.runLater(() ->
         {
             guiDialog.appearInNodes(filesNumber, totalSize);
-            guiDialog.appearInNodes(filesNumber,regularFilesNumber,directoriesNumber,
+            guiDialog.appearInNodes(filesNumber, regularFilesNumber, directoriesNumber,
                     totalSize);
         });
     }
