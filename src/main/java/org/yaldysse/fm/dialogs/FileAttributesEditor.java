@@ -10,6 +10,7 @@ import javafx.scene.effect.DropShadow;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.input.KeyCode;
+import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
@@ -24,6 +25,7 @@ import org.yaldysse.fm.dialogs.SimpleFileSizeAndNumberCounter;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.nio.file.attribute.*;
 import java.text.NumberFormat;
@@ -127,6 +129,7 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
     private Label[] extendedAttributesValues_Label;
 
     private Label deleteExtendedAttribute_Label;
+    private Label saveExtendedAttribute_Label;
 
     private ProgressIndicator sizeProgressIndicator;
     private ProgressIndicator filesNumber_ProgressIndicator;
@@ -546,7 +549,7 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
                 }
                 if (!edit_VBox.getChildren().contains(creationTimeEditorPane_VBox))
                 {
-                    edit_VBox.getChildren().add(edit_VBox.getChildren().indexOf(editCreationTime_HBox) +1,
+                    edit_VBox.getChildren().add(edit_VBox.getChildren().indexOf(editCreationTime_HBox) + 1,
                             creationTimeEditorPane_VBox);
                 }
                 apply_Button.setDisable(false);
@@ -1289,25 +1292,54 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
         attributesNames_ComboBox.setOnAction(event ->
         {
             int selectedIndex = attributesNames_ComboBox.getSelectionModel().getSelectedIndex();
-            System.out.println("Выбран єлемент с индексом: " + selectedIndex);
+            System.out.println("Выбран элемент с индексом: " + selectedIndex);
 
             if (selectedIndex == 0)
             {
                 attributesNames_ComboBox.setEditable(true);
                 deleteExtendedAttribute_Label.setVisible(false);
+                extendedAttributeValue_TextField.setText("");
             }
             else if (selectedIndex == -1)
             {
-                System.out.println("Новый єлемент: " + attributesNames_ComboBox.getValue());
+                System.out.println("Новый элемент: " + attributesNames_ComboBox.getValue());
                 attributesNames_ComboBox.getItems().add(attributesNames_ComboBox.getValue());
-                deleteExtendedAttribute_Label.setVisible(true);
+                saveExtendedAttribute_Label.setVisible(true);
             }
             else
             {
                 attributesNames_ComboBox.setEditable(false);
-                deleteExtendedAttribute_Label.setVisible(true);
+                saveExtendedAttribute_Label.setVisible(true);
+
+                UserDefinedFileAttributeView temporaryUD = Files.getFileAttributeView(targetFile_Path, UserDefinedFileAttributeView.class,
+                        LinkOption.NOFOLLOW_LINKS);
+
+                try
+                {
+                    int attributeSize = temporaryUD.size(attributesNames_ComboBox.getItems()
+                            .get(selectedIndex));
+
+                    if (attributeSize > 0)
+                    {
+                        deleteExtendedAttribute_Label.setVisible(true);
+                    }
+
+                    ByteBuffer byteBuffer = ByteBuffer.allocate(attributeSize);
+
+                    temporaryUD.read(attributesNames_ComboBox.getItems().get(selectedIndex),
+                            byteBuffer);
+                    byteBuffer.flip();
+                    extendedAttributeValue_TextField.setText(StandardCharsets.UTF_8
+                            .decode(byteBuffer).toString());
+                }
+                catch (IOException ioException)
+                {
+                    ioException.printStackTrace();
+                }
+
+
             }
-            apply_Button.setDisable(false);
+            //apply_Button.setDisable(false);
         });
 
         deleteExtendedAttribute_Label = new Label("✘");
@@ -1318,6 +1350,15 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
         deleteExtendedAttribute_Label.setTooltip(new Tooltip("Delete attribute"));
         deleteExtendedAttribute_Label.setOnMouseClicked(event -> deleteExtendedAttribute_Action(null));
         deleteExtendedAttribute_Label.setVisible(false);
+
+        saveExtendedAttribute_Label = new Label("✒");
+        saveExtendedAttribute_Label.setFont(Font.font(Font.getDefault().getName(),
+                FontWeight.BOLD, 26.0D));
+        saveExtendedAttribute_Label.setEffect(new DropShadow(6.0D, Color.BLACK));
+        saveExtendedAttribute_Label.setVisible(false);
+        saveExtendedAttribute_Label.setTextFill(Color.DARKORANGE);
+        saveExtendedAttribute_Label.setOnMouseClicked(this::saveExtendedAttribute_Action);
+
 
         Iterator<String> extendedAttributes_Iterator = extendedAttributesNames_List.iterator();
         while (extendedAttributes_Iterator.hasNext())
@@ -1350,7 +1391,10 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
         HBox name_HBox = new HBox(FM_GUI.rem * 0.85D, name_Label, attributesNames_ComboBox,
                 deleteExtendedAttribute_Label);
         name_HBox.setAlignment(Pos.CENTER_LEFT);
-        HBox value_HBox = new HBox(FM_GUI.rem * 0.85D, value_Label, extendedAttributeValue_TextField);
+        HBox value_HBox = new HBox(FM_GUI.rem * 0.85D, value_Label, extendedAttributeValue_TextField,
+                saveExtendedAttribute_Label);
+        value_HBox.setAlignment(Pos.CENTER_LEFT);
+
 
         extendedAttributesEditorPane_VBox.getChildren().addAll(name_HBox, value_HBox);
     }
@@ -1427,32 +1471,32 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
             return;
         }
 
-        try
-        {
-            if (editExtendedAttributes_CheckBox.isSelected())
-            {
-                applyNewExtendedAttribute();
-                apply_Button.setDisable(true);
-            }
-        }
-        catch (FileSystemException fileSystemException)
-        {
-            System.out.println("Недостаточно привилегий для изменения расширенных аттрибутов.");
-            extendedAttributesEditorPane_VBox.getChildren().clear();
-            Label accessDenied = new Label("You can not change extended attributes of this file. Required Root privilege.");
-            accessDenied.setWrapText(true);
-            accessDenied.setTextFill(Color.LIGHTCORAL);
-            accessDenied.setEffect(new DropShadow(11.0D, Color.BLACK));
-            accessDenied.setFont(Font.font(Font.getDefault().getName(), FontWeight.BOLD, 14.0D));
-            extendedAttributesEditorPane_VBox.getChildren().add(accessDenied);
-            disableAllEditCheckBoxes();
-            return;
-        }
-        catch (IOException ioException)
-        {
-            ioException.printStackTrace();
-            return;
-        }
+//        try
+//        {
+//            if (editExtendedAttributes_CheckBox.isSelected())
+//            {
+//                applyNewExtendedAttribute();
+//                apply_Button.setDisable(true);
+//            }
+//        }
+//        catch (FileSystemException fileSystemException)
+//        {
+//            System.out.println("Недостаточно привилегий для изменения расширенных аттрибутов.");
+//            extendedAttributesEditorPane_VBox.getChildren().clear();
+//            Label accessDenied = new Label("You can not change extended attributes of this file. Required Root privilege.");
+//            accessDenied.setWrapText(true);
+//            accessDenied.setTextFill(Color.LIGHTCORAL);
+//            accessDenied.setEffect(new DropShadow(11.0D, Color.BLACK));
+//            accessDenied.setFont(Font.font(Font.getDefault().getName(), FontWeight.BOLD, 14.0D));
+//            extendedAttributesEditorPane_VBox.getChildren().add(accessDenied);
+//            disableAllEditCheckBoxes();
+//            return;
+//        }
+//        catch (IOException ioException)
+//        {
+//            ioException.printStackTrace();
+//            return;
+//        }
 
         try
         {
@@ -1645,18 +1689,18 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
         posixFileAttributeView.setGroup(newGroupPrincipal[0]);
     }
 
-    private void applyNewExtendedAttribute() throws AccessDeniedException, IOException
-    {
-        UserDefinedFileAttributeView view = Files.getFileAttributeView(targetFile_Path, UserDefinedFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
-
-        String newAttributeName = attributesNames_ComboBox.getValue();
-        String newAttributeValue = extendedAttributeValue_TextField.getText();
-
-        System.out.println("Добавление нового аттрибута с именем " + newAttributeName
-                + ", значением " + newAttributeValue);
-
-        view.write(newAttributeName, Charset.defaultCharset().encode(newAttributeValue));
-    }
+//    private void applyNewExtendedAttribute() throws AccessDeniedException, IOException
+//    {
+//        UserDefinedFileAttributeView view = Files.getFileAttributeView(targetFile_Path, UserDefinedFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
+//
+//        String newAttributeName = attributesNames_ComboBox.getValue();
+//        String newAttributeValue = extendedAttributeValue_TextField.getText();
+//
+//        System.out.println("Добавление нового аттрибута с именем " + newAttributeName
+//                + ", значением " + newAttributeValue);
+//
+//        view.write(newAttributeName, Charset.defaultCharset().encode(newAttributeValue));
+//    }
 
 
     /**
@@ -1977,5 +2021,27 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
         filesNumberInsideValue_Label.setText("" + aFilesNumber);
         attributes_GridPane.getChildren().remove(sizeProgressIndicator);
         attributes_GridPane.getChildren().remove(filesNumber_ProgressIndicator);
+    }
+
+    private void saveExtendedAttribute_Action(MouseEvent event)
+    {
+        try
+        {
+            UserDefinedFileAttributeView view = Files.getFileAttributeView(targetFile_Path, UserDefinedFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
+
+            String newAttributeName = attributesNames_ComboBox.getValue();
+            String newAttributeValue = extendedAttributeValue_TextField.getText();
+
+            System.out.println("Добавление нового аттрибута с именем " + newAttributeName
+                    + ", значением " + newAttributeValue);
+
+            view.write(newAttributeName, Charset.defaultCharset().encode(newAttributeValue));
+            deleteExtendedAttribute_Label.setVisible(true);
+            attributesNames_ComboBox.setEditable(false);
+        }
+        catch (IOException ioException)
+        {
+            ioException.printStackTrace();
+        }
     }
 }
