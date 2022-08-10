@@ -61,6 +61,8 @@ import java.util.*;
 import java.util.List;
 import java.util.stream.Stream;
 
+import static org.yaldysse.fm.Utils.getExtension;
+
 
 /**
  * Нужно сделать:
@@ -609,7 +611,7 @@ public class FM_GUI extends Application
 
         checksum_MenuItem = new MenuItem(currentLanguage.getProperty("checksum_menuItem",
                 "Checksum..."));
-        checksum_MenuItem.setAccelerator(new KeyCodeCombination(KeyCode.H,KeyCombination.CONTROL_DOWN));
+        checksum_MenuItem.setAccelerator(new KeyCodeCombination(KeyCode.H, KeyCombination.CONTROL_DOWN));
         checksum_MenuItem.setOnAction(this::checkSum_Action);
 
         edit_Menu.getItems().addAll(showOrEditAttributes_MenuItem, checksum_MenuItem,
@@ -1992,114 +1994,132 @@ public class FM_GUI extends Application
      */
     private void rename_MenuItem_Action(ActionEvent event)
     {
-        VBox fileName_VBox = new VBox(rem * 0.15D);
-        fileName_VBox.setAlignment(Pos.CENTER);
+        if (activatedTreeTableView.getSelectionModel().getSelectedItems().size() > 1)
+        {
+            ObservableList<TreeItem<FileData>> selectedItems = activatedTreeTableView.getSelectionModel().getSelectedItems();
+
+            Path[] selectedPaths = new Path[selectedItems.size()];
+
+            for (int k = 0; k < selectedItems.size(); k++)
+            {
+                selectedPaths[k] = currentPath.get(currentContentTabIndex).resolve(
+                        selectedItems.get(k).getValue().getName());
+            }
+
+            BulkRename filesRenamer = new BulkRename(selectedPaths, currentLanguage);
+            filesRenamer.show();
+        }
+        else
+        {
+
+            VBox fileName_VBox = new VBox(rem * 0.15D);
+            fileName_VBox.setAlignment(Pos.CENTER);
 //        fileName_VBox.setBackground(new Background(new BackgroundFill(Color.LIGHTCYAN,
 //                CornerRadii.EMPTY, Insets.EMPTY)));
 
-        Label fileAlreadyExists_Label = new Label("File with the same name already exists.");
-        fileAlreadyExists_Label.setWrapText(true);
-        fileAlreadyExists_Label.setVisible(false);
-        fileAlreadyExists_Label.setTextFill(Color.LIGHTCORAL);
-        //fileAlreadyExists_Label.setBackground(new Background(new BackgroundFill(Color.LIGHTCYAN, CornerRadii.EMPTY, Insets.EMPTY)));
-        fileAlreadyExists_Label.setFont(Font.font(fileAlreadyExists_Label.getFont().getName(),
-                FontWeight.BOLD, 12.0D));
+            Label fileAlreadyExists_Label = new Label("File with the same name already exists.");
+            fileAlreadyExists_Label.setWrapText(true);
+            fileAlreadyExists_Label.setVisible(false);
+            fileAlreadyExists_Label.setTextFill(Color.LIGHTCORAL);
+            //fileAlreadyExists_Label.setBackground(new Background(new BackgroundFill(Color.LIGHTCYAN, CornerRadii.EMPTY, Insets.EMPTY)));
+            fileAlreadyExists_Label.setFont(Font.font(fileAlreadyExists_Label.getFont().getName(),
+                    FontWeight.BOLD, 12.0D));
 
-        TextField fileName_TextField = new TextField();
-        fileName_TextField.setPromptText("Enter new name here");
-        fileName_TextField.setOnKeyReleased(eventFileName ->
-        {
-            System.out.println("released");
-            if (fileAlreadyExists_Label != null && fileAlreadyExists_Label.isVisible())
+            TextField fileName_TextField = new TextField();
+            fileName_TextField.setPromptText("Enter new name here");
+            fileName_TextField.setOnKeyReleased(eventFileName ->
             {
-                fileAlreadyExists_Label.setVisible(false);
-            }
-        });
-
-
-        FileData temporaryFileData = activatedTreeTableView.getSelectionModel().getSelectedItem().getValue();
-        Path temporaryPath = currentPath.get(currentContentTabIndex).resolve(temporaryFileData.getName());
-
-        fileName_TextField.setText(temporaryFileData.getName());
-
-
-        fileName_VBox.getChildren().addAll(fileName_TextField, fileAlreadyExists_Label);
-
-        confirmOperationDialog.setTitle("Rename");
-        confirmOperationDialog.setHeaderText("Rename");
-        confirmOperationDialog.setHeaderColor(Color.INDIGO);
-        confirmOperationDialog.setMessageText("Enter a new name below.");
-        confirmOperationDialog.setMessageTextColor(Color.BLACK);
-        confirmOperationDialog.setMessageTextFont(Font.font(Font.getDefault().getName(), FontWeight.BOLD, 13.0D));
-        confirmOperationDialog.setOperationButtons(ConfirmDialogButtonType.CANCEL, ConfirmDialogButtonType.OK);
-        confirmOperationDialog.setContent(fileName_VBox);
-        confirmOperationDialog.setConfirmOperationOnEnterKey(true);
-        confirmOperationDialog.setBackgroundToRootNode(new Background(new BackgroundFill(Color.DARKSEAGREEN, CornerRadii.EMPTY, Insets.EMPTY)));
-
-        ObservableList<Node> nodes = confirmOperationDialog.getOperationButtons();
-        for (int k = 0; k < nodes.size(); k++)
-        {
-            ConfirmOperationButton temporaryConfirmOperationButton = (ConfirmOperationButton) nodes.get(k);
-            temporaryConfirmOperationButton.setBackground(Background.EMPTY);
-            temporaryConfirmOperationButton.setBorder(new Border(new BorderStroke(Color.BLACK,
-                    BorderStrokeStyle.SOLID, CornerRadii.EMPTY, BorderStroke.MEDIUM, Insets.EMPTY)));
-        }
-
-        while (true)
-        {
-            confirmOperationDialog.showAndWait();
-            System.out.println("Выбрана кнопка: " + confirmOperationDialog.getActivatedOperationButton().name());
-
-            if (confirmOperationDialog.getActivatedOperationButton() == ConfirmDialogButtonType.OK)
-            {
-                Path targetPath = null;
-
-                try
+                System.out.println("released");
+                if (fileAlreadyExists_Label != null && fileAlreadyExists_Label.isVisible())
                 {
-                    targetPath = currentPath.get(currentContentTabIndex).resolve(fileName_TextField.getText());
-                    Path resultPath = Files.move(temporaryPath, targetPath);
+                    fileAlreadyExists_Label.setVisible(false);
+                }
+            });
+
+
+            FileData temporaryFileData = activatedTreeTableView.getSelectionModel().getSelectedItem().getValue();
+            Path temporaryPath = currentPath.get(currentContentTabIndex).resolve(temporaryFileData.getName());
+
+            fileName_TextField.setText(temporaryFileData.getName());
+
+
+            fileName_VBox.getChildren().addAll(fileName_TextField, fileAlreadyExists_Label);
+
+            confirmOperationDialog.setTitle("Rename");
+            confirmOperationDialog.setHeaderText("Rename");
+            confirmOperationDialog.setHeaderColor(Color.INDIGO);
+            confirmOperationDialog.setMessageText("Enter a new name below.");
+            confirmOperationDialog.setMessageTextColor(Color.BLACK);
+            confirmOperationDialog.setMessageTextFont(Font.font(Font.getDefault().getName(), FontWeight.BOLD, 13.0D));
+            confirmOperationDialog.setOperationButtons(ConfirmDialogButtonType.CANCEL, ConfirmDialogButtonType.OK);
+            confirmOperationDialog.setContent(fileName_VBox);
+            confirmOperationDialog.setConfirmOperationOnEnterKey(true);
+            confirmOperationDialog.setBackgroundToRootNode(new Background(new BackgroundFill(Color.DARKSEAGREEN, CornerRadii.EMPTY, Insets.EMPTY)));
+
+            ObservableList<Node> nodes = confirmOperationDialog.getOperationButtons();
+            for (int k = 0; k < nodes.size(); k++)
+            {
+                ConfirmOperationButton temporaryConfirmOperationButton = (ConfirmOperationButton) nodes.get(k);
+                temporaryConfirmOperationButton.setBackground(Background.EMPTY);
+                temporaryConfirmOperationButton.setBorder(new Border(new BorderStroke(Color.BLACK,
+                        BorderStrokeStyle.SOLID, CornerRadii.EMPTY, BorderStroke.MEDIUM, Insets.EMPTY)));
+            }
+
+            while (true)
+            {
+                confirmOperationDialog.showAndWait();
+                System.out.println("Выбрана кнопка: " + confirmOperationDialog.getActivatedOperationButton().name());
+
+                if (confirmOperationDialog.getActivatedOperationButton() == ConfirmDialogButtonType.OK)
+                {
+                    Path targetPath = null;
 
                     try
                     {
-                        FileData temporaryData = activatedTreeTableView.getSelectionModel().getSelectedItem().getValue();
-                        temporaryData = temporaryData.cloneFileData();
-                        temporaryData.setName(targetPath.getFileName().toString());
-                        activatedTreeTableView.getSelectionModel().getSelectedItem().setValue(temporaryData);
+                        targetPath = currentPath.get(currentContentTabIndex).resolve(fileName_TextField.getText());
+                        Path resultPath = Files.move(temporaryPath, targetPath);
+
+                        try
+                        {
+                            FileData temporaryData = activatedTreeTableView.getSelectionModel().getSelectedItem().getValue();
+                            temporaryData = temporaryData.cloneFileData();
+                            temporaryData.setName(targetPath.getFileName().toString());
+                            activatedTreeTableView.getSelectionModel().getSelectedItem().setValue(temporaryData);
+                        }
+                        catch (CloneNotSupportedException cloneNotSupportedException)
+                        {
+                            cloneNotSupportedException.printStackTrace();
+                        }
+                        if (resultPath != null)
+                        {
+                            break;
+                        }
                     }
-                    catch (CloneNotSupportedException cloneNotSupportedException)
+                    catch (FileAlreadyExistsException fileAlreadyExistsException)
                     {
-                        cloneNotSupportedException.printStackTrace();
+                        //fileAlreadyExistsException.printStackTrace();
+                        System.out.println("Файл с таким именем уже существует.");
+                        fileAlreadyExists_Label.setVisible(true);
+                        confirmOperationDialog.setContent(fileName_VBox);
                     }
-                    if (resultPath != null)
+                    catch (NoSuchFileException noSuchFileException)
                     {
+                        //fileAlreadyExistsException.printStackTrace();
+                        System.out.println("Обычно эта ошибка означает, что имя недопустимое.");
                         break;
                     }
+                    catch (IOException ioException)
+                    {
+                        ioException.printStackTrace();
+                    }
+
                 }
-                catch (FileAlreadyExistsException fileAlreadyExistsException)
+                else if (confirmOperationDialog.getActivatedOperationButton() == ConfirmDialogButtonType.CANCEL)
                 {
-                    //fileAlreadyExistsException.printStackTrace();
-                    System.out.println("Файл с таким именем уже существует.");
-                    fileAlreadyExists_Label.setVisible(true);
-                    confirmOperationDialog.setContent(fileName_VBox);
-                }
-                catch (NoSuchFileException noSuchFileException)
-                {
-                    //fileAlreadyExistsException.printStackTrace();
-                    System.out.println("Обычно эта ошибка означает, что имя недопустимое.");
                     break;
                 }
-                catch (IOException ioException)
-                {
-                    ioException.printStackTrace();
-                }
-
-            }
-            else if (confirmOperationDialog.getActivatedOperationButton() == ConfirmDialogButtonType.CANCEL)
-            {
-                break;
             }
         }
-
     }
 
     private void copyFileName_MenuItem_Action(ActionEvent event)
@@ -2651,7 +2671,7 @@ public class FM_GUI extends Application
     /**
      * Добавляет новую строку в таблицу файлов. При этом в объект модели
      * данных записываются только те данные, для которых отображены соответствующие
-     * колонки. Не запрашивает сортироку.
+     * колонки. Не запрашивает сортировку.
      */
     private void addRowToTreeTable(Path targetPath)
     {
@@ -3372,27 +3392,6 @@ public class FM_GUI extends Application
         }
     }
 
-    private String getExtension(final Path targetPath)
-    {
-        String extension = "";
-        if (targetPath.getFileName() != null)
-        {
-            int extensionStartIndex = targetPath.getFileName().toString().lastIndexOf('.');
-
-            if (extensionStartIndex > 0)
-            {
-                extension = targetPath.getFileName().toString().substring(extensionStartIndex + 1);
-                extension = extension.toUpperCase();
-            }
-        }
-        else
-        {
-            System.out.println("Нельзя определить расширения, т.к. не удалось" +
-                    "получить имя.");
-            return "";
-        }
-        return extension;
-    }
 
     private void contextMenuForFiles_ShowingAction(WindowEvent event)
     {
@@ -3624,7 +3623,7 @@ public class FM_GUI extends Application
         paste_MenuItem.setText(currentLanguage.getProperty("paste_menuItem", "Paste"));
         move_MenuItem.setText(currentLanguage.getProperty("move_menuItem", "Move"));
         showOrEditAttributes_MenuItem.setText(currentLanguage.getProperty("attributes_menuItem", "Attributes"));
-        checksum_MenuItem.setText(currentLanguage.getProperty("checksum_menuItem","Checksum"));
+        checksum_MenuItem.setText(currentLanguage.getProperty("checksum_menuItem", "Checksum"));
 
         goTo_Menu.setText(currentLanguage.getProperty("goTo_menu", "Go to..."));
         goToPreviousTab_MenuItem.setText(currentLanguage.getProperty("goToPreviousTab_menuItem", "Previous tab"));
@@ -3824,6 +3823,7 @@ public class FM_GUI extends Application
                     .getSelectedItems().size());
         }
 
+        System.out.println("измене");
         createAndStartSelectedFilesSizeThreadForInfoToolBar();
     }
 
@@ -3883,8 +3883,15 @@ public class FM_GUI extends Application
 
         for (int k = 0; k < targetPaths.length; k++)
         {
-            targetPaths[k] = temporaryCurrentPath.resolve(items.get(k).getValue()
-                    .getName());
+            if (items.get(k) != null)
+            {
+                targetPaths[k] = temporaryCurrentPath.resolve(items.get(k).getValue()
+                        .getName());
+            }
+            else
+            {
+                targetPaths[k] = temporaryCurrentPath;
+            }
         }
 
         fileSizeCounterForToolBar = new SimpleFileSizeAndNumberCounter(targetPaths,
