@@ -14,8 +14,8 @@
 <entry key="file_menu">Головне</entry>
 <entry key="createNewTab_menuItem">Створити нову вкладку</entry>
 <entry key="openInNewTab_menuItem">Відкрити в новій вкладкі</entry>
-<entry key="copyFileName_menuItem">Копіювати ім'я файлу</entry>
-<entry key="copyAbsolutePath_meuItem">Копіювати повний шлях до файлу</entry>
+<entry key="copyFileName_menuItem">Ім'я</entry>
+<entry key="copyAbsolutePath_meuItem">Повний шлях</entry>
 <entry key="favorites_menuItem">Уподобання</entry>
 <entry key="openTerminalHere_menuItem">Відкрити термінал</entry>
 <entry key="language_menu">Мова</entry>
@@ -26,7 +26,8 @@
 <entry key="createFile_menuItem">Створити файл</entry>
 <entry key="createDirectory_menuItem">Створити каталог</entry>
 <entry key="createSymbolicLink_menuItem">Створити символічне посилання</entry>
-<entry key="copy_menuItem">Копіювати</entry>
+<entry key="copy_menu">Копіювати...</entry>
+<entry key="copyFile_menuItem">Файл</entry>
 <entry key="move_menuItem">Вирізати</entry>
 <entry key="paste_menuItem">Вставити</entry>
 <entry key="rename_menuItem">Змінити назву</entry>
@@ -37,7 +38,7 @@
 <entry key="goTo_menu">Перейти до...</entry>
 <entry key="goToRootDirectories_menuItem">Списку розділів</entry>
 <entry key="goToHomeDirectory_menuItem">Домашнього каталогу</entry>
-<entry key="goToUserDirectory_MenuItem">Робочого каталогу</entry>
+<entry key="goToUserDirectory_menuItem">Робочого каталогу</entry>
 <entry key="goToParent_menuItem">Батьківського каталогу</entry>
 <entry key="goToPreviousTab_menuItem">Попередньої вкладки</entry>
 <entry key="goToNextTab_menuItem">Наступної вкладки</entry>
@@ -111,7 +112,7 @@
 <entry key="directory_str">Каталог</entry>
 <entry key="regularFile_str">Файл</entry>
 <entry key="symbolicLink_str">Символічне посилання</entry>
-<!--OpenWith Diaglog-->
+<!--OpenWith Dialog-->
 <entry key="programName_label">Назва програми</entry>
 <entry key="enterNameProgramHere_str">Введіть назву програми</entry>
 <entry key="enterCommandToExecuteHere_str">Введіть команду, що буде виконана</entry>
@@ -129,6 +130,7 @@
 <entry key="freeSpace_fileStoreInfo_Label">Доступно:</entry>
 <entry key="usedSpace_fileStoreInfo_Label">Використано:</entry>
 <entry key="fileSystemName_fileStoreInfo_Label">Файлова система:</entry>
+<entry key="label_fileStoreInfo_Label">Мітка:</entry>
 <entry key="path_fileStoreInfo_Label">Шлях:</entry>
 <entry key="execute_button">Виконати</entry>
 <entry key="deletedFiles_label">Видалено файлів:</entry>

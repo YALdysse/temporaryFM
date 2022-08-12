@@ -6,7 +6,7 @@
 
     <groupId>org.yaldysse.fm</groupId>
     <artifactId>PsevdoFM</artifactId>
-    <version>build_18</version>
+    <version>build_19</version>
 
 <!--    <properties>-->
 <!--        <maven.compiler.release>17</maven.compiler.release>-->
@@ -75,7 +75,7 @@
         <dependency>
             <groupId>org.yaldysse</groupId>
             <artifactId>YALdysse_Tools</artifactId>
-            <version>SNAPSHOT 13</version>
+            <version>SNAPSHOT 14</version>
         </dependency>
 
     </dependencies>

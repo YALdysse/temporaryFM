@@ -72,7 +72,7 @@ public class FileStoreInfoPopup extends Popup
 
         info_GridPane = new GridPane();
         info_GridPane.setHgap(rem * 0.45D);
-        info_GridPane.setVgap(rem * 0.4D);
+        info_GridPane.setVgap(rem * 0.35D);
         //info_GridPane.setPadding(new Insets(rem*1.0D));
 
         //fileStoreName_Label = new Label("Name");
@@ -99,7 +99,8 @@ public class FileStoreInfoPopup extends Popup
                 "File System:"));
         fileSystemName_Label.setFont(textFont);
 
-        fileStoreLabel_Label = new Label("Label:");
+        fileStoreLabel_Label = new Label(language.getProperty("label_fileStoreInfo_Label",
+                "Label:"));
         fileStoreLabel_Label.setFont(textFont);
 
         fileStorePath_Label = new Label(language.getProperty("path_fileStoreInfo_Label",

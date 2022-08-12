@@ -44,6 +44,7 @@ import org.yaldysse.fm.dialogs.copy.CopyFilesDialog;
 import org.yaldysse.fm.dialogs.delete.DeleteFileDialog;
 import org.yaldysse.fm.dialogs.delete.DeleteOperationResult;
 import org.yaldysse.fm.dialogs.favorites.FavoritesDialog;
+import org.yaldysse.tools.ErrorCatcher;
 import org.yaldysse.tools.Shell;
 import org.yaldysse.tools.StorageCapacity;
 import org.yaldysse.tools.StorageSpaceFormatter;
@@ -154,7 +155,7 @@ public class FM_GUI extends Application
     private MenuItem createFile_MenuItem;
     private MenuItem createDirectory_MenuItem;
     private MenuItem createSymbolicLink_MenuItem;
-    private MenuItem copy_MenuItem;
+    private MenuItem copyFile_MenuItem;
     private MenuItem paste_MenuItem;
     private MenuItem move_MenuItem;
     private ContextMenu contextMenuForFiles;
@@ -166,6 +167,7 @@ public class FM_GUI extends Application
     private MenuItem openInNewTab_MenuItem;
     private MenuItem openInCustomProgram_contextMenuForFilesItem;
     private Menu openWith_Menu;
+    private Menu copy_Menu;
 
     private MenuItem createFile_contextMenuForFilesItem;
     private MenuItem createDirectory_contextMenuForFilesItem;
@@ -284,7 +286,6 @@ public class FM_GUI extends Application
         root.getChildren().addAll(menu_BorderPane, content_VBox);
         activatedTreeTableView.requestFocus();
 
-        //goToDriveList();
         //-----------------
         List<String> rawParametersList = getParameters().getRaw();
         if (rawParametersList != null && rawParametersList.size() > 1)
@@ -295,7 +296,8 @@ public class FM_GUI extends Application
             }
             else
             {
-                goToFileStoragesPane();
+                //goToFileStoragesPane();
+                goToFileStoragesPane_Fixed();
                 content_TabPane.getSelectionModel().getSelectedItem().setText(FIlE_STORES_PATH);
             }
         }
@@ -305,7 +307,7 @@ public class FM_GUI extends Application
             for (int k = 0; k < tabsNumber; k++)
             {
                 Path temporaryPath = Path.of(properties.getProperty("tabPath_" + k, FIlE_STORES_PATH));
-                System.out.println("Путь из настроек:" + temporaryPath.toAbsolutePath().toString());
+                System.out.println("Путь из настроек: " + temporaryPath.toAbsolutePath().toString());
                 if (Files.exists(temporaryPath, LinkOption.NOFOLLOW_LINKS))
                 {
                     if (k + 1 > content_TabPane.getTabs().size())
@@ -326,8 +328,7 @@ public class FM_GUI extends Application
                             .setText(fileName);
                 }
             }
-            if (tabsNumber > 0 && content_TabPane.getTabs().size() > tabsNumber
-                    && Files.exists(currentPath.get(tabsNumber - 1), LinkOption.NOFOLLOW_LINKS))
+            if (tabsNumber > 0 && content_TabPane.getTabs().size() > 0)
             {
                 content_TabPane.getSelectionModel().select(
                         content_TabPane.getTabs().size() - 1);
@@ -338,7 +339,8 @@ public class FM_GUI extends Application
                 return;
             }
 
-            goToFileStoragesPane();
+            //goToFileStoragesPane();
+            goToFileStoragesPane_Fixed();
             content_TabPane.getSelectionModel().getSelectedItem().setText(FIlE_STORES_PATH);
         }
 
@@ -355,7 +357,7 @@ public class FM_GUI extends Application
         exit_MenuItem.setAccelerator(new KeyCodeCombination(KeyCode.Q, KeyCombination.CONTROL_DOWN));
 
         copyFileName_MenuItem = new MenuItem(currentLanguage.getProperty("copyFileName_menuItem",
-                "Copy name of file"));
+                "Name"));
         copyFileName_MenuItem.setAccelerator(new KeyCodeCombination(KeyCode.C, KeyCombination.ALT_DOWN));
         copyFileName_MenuItem.setOnAction(event ->
         {
@@ -363,7 +365,7 @@ public class FM_GUI extends Application
         });
 
         copyAbsoluteNamePath_MenuItem = new MenuItem(currentLanguage.getProperty("copyAbsolutePath_meuItem",
-                "Copy Absolute path of file"));
+                "Absolute path"));
         copyAbsoluteNamePath_MenuItem.setAccelerator(new KeyCodeCombination(KeyCode.C, KeyCombination.CONTROL_DOWN,
                 KeyCombination.ALT_DOWN));
         copyAbsoluteNamePath_MenuItem.setOnAction(event ->
@@ -399,7 +401,6 @@ public class FM_GUI extends Application
         file_Menu = new Menu(currentLanguage.getProperty("file_menu",
                 "Main"));
         file_Menu.getItems().addAll(createNewTab_MenuItem, openInNewTab_MenuItem, new SeparatorMenuItem(),
-                copyFileName_MenuItem, copyAbsoluteNamePath_MenuItem, new SeparatorMenuItem(),
                 favoritesDialog_MenuItem, openTerminalHere_MenuItem, new SeparatorMenuItem(),
                 language_Menu, exit_MenuItem);
 
@@ -412,8 +413,8 @@ public class FM_GUI extends Application
                 "Root directories"));
         goToRootDirectories_MenuItem.setOnAction(event ->
         {
-            //goToDriveList();
-            goToFileStoragesPane();
+            //goToFileStoragesPane();
+            goToFileStoragesPane_Fixed();
         });
         goToRootDirectories_MenuItem.setAccelerator(new KeyCodeCombination(KeyCode.SLASH, KeyCodeCombination.ALT_DOWN));
 
@@ -566,12 +567,12 @@ public class FM_GUI extends Application
         rename_MenuItem.setOnAction(this::rename_MenuItem_Action);
 
         createFile_MenuItem = new MenuItem(currentLanguage.getProperty("createFile_menuItem",
-                "Create file"));
+                "Create File"));
         createFile_MenuItem.setAccelerator(new KeyCodeCombination(KeyCode.Y, KeyCombination.CONTROL_DOWN));
         createFile_MenuItem.setOnAction(this::createFile_MenuItem_Action);
 
         createDirectory_MenuItem = new MenuItem(currentLanguage.getProperty("createDirectory_menuItem",
-                "Create directory"));
+                "Create Directory"));
         createDirectory_MenuItem.setAccelerator(new KeyCodeCombination(KeyCode.N, KeyCombination.CONTROL_DOWN));
         createDirectory_MenuItem.setOnAction(this::createDirectory_MenuItem_Action);
 
@@ -580,10 +581,10 @@ public class FM_GUI extends Application
         createSymbolicLink_MenuItem.setAccelerator(new KeyCodeCombination(KeyCode.L, KeyCombination.CONTROL_DOWN));
         createSymbolicLink_MenuItem.setOnAction(this::createSymbolicLink_MenuItem_Action);
 
-        copy_MenuItem = new MenuItem(currentLanguage.getProperty("copy_menuItem",
-                "Copy"));
-        copy_MenuItem.setAccelerator(new KeyCodeCombination(KeyCode.C, KeyCombination.CONTROL_DOWN));
-        copy_MenuItem.setOnAction(event ->
+        copyFile_MenuItem = new MenuItem(currentLanguage.getProperty("copy_menuItem",
+                "File"));
+        copyFile_MenuItem.setAccelerator(new KeyCodeCombination(KeyCode.C, KeyCombination.CONTROL_DOWN));
+        copyFile_MenuItem.setOnAction(event ->
         {
             copyFilesToClipboard_MenuItem_Action(event);
             filesToMoveFromClipboard = false;
@@ -614,10 +615,16 @@ public class FM_GUI extends Application
         checksum_MenuItem.setAccelerator(new KeyCodeCombination(KeyCode.H, KeyCombination.CONTROL_DOWN));
         checksum_MenuItem.setOnAction(this::checkSum_Action);
 
+        copy_Menu = new Menu(currentLanguage.getProperty("copy_menu",
+                "Copy..."));
+        copy_Menu.getItems().addAll(copyFile_MenuItem,
+                copyFileName_MenuItem,
+                copyAbsoluteNamePath_MenuItem);
+
         edit_Menu.getItems().addAll(showOrEditAttributes_MenuItem, checksum_MenuItem,
                 new SeparatorMenuItem(),
                 createFile_MenuItem, createDirectory_MenuItem, createSymbolicLink_MenuItem,
-                new SeparatorMenuItem(), copy_MenuItem, move_MenuItem, paste_MenuItem,
+                new SeparatorMenuItem(), copy_Menu, move_MenuItem, paste_MenuItem,
                 new SeparatorMenuItem(), rename_MenuItem, delete_MenuItem);
 
         menu_Bar = new MenuBar(file_Menu, edit_Menu, goTo_Menu, sortBy_Menu);
@@ -1057,6 +1064,7 @@ public class FM_GUI extends Application
         for (FileStore fileStore : FileSystems.getDefault().getFileStores())
         {
             temporaryFileStorageName = fileStore.toString();
+            System.out.println("Temp: " + temporaryFileStorageName);
 
             if (temporaryFileStorageName.indexOf("(") == 0)
             {
@@ -1204,6 +1212,35 @@ public class FM_GUI extends Application
         openTerminalHere_MenuItem.setDisable(true);
     }
 
+    private void goToFileStoragesPane_Fixed()
+    {
+        fileStorages_FlowPane.getChildren().clear();
+
+        VBox temporaryContainerWithFiles_VBox = allContainersWithFiles_ArrayList.get(currentContentTabIndex);
+        temporaryContainerWithFiles_VBox.getChildren().clear();
+        temporaryContainerWithFiles_VBox.getChildren().add(fileStores_ScrollPane);
+
+        for (FileStoreInfo fileStoreInfo : FileStoreInfo.getAll())
+        {
+            FileStorageButton temporaryFileStore_Button = new FileStorageButton(fileStoreInfo.toString(),
+                    fileStoreInfo.getPath());
+            temporaryFileStore_Button.setOnAction(event ->
+            {
+                FileStorageButton temporaryButton = (FileStorageButton) event.getSource();
+                goToPath(temporaryButton.getFileStoragePath());
+                temporaryContainerWithFiles_VBox.getChildren().clear();
+                temporaryContainerWithFiles_VBox.getChildren().add(activatedTreeTableView);
+            });
+            fileStorages_FlowPane.getChildren().add(temporaryFileStore_Button);
+        }
+
+        fileSystemName_Label.setText("?");
+        currentPath_TextField.setText(FIlE_STORES_PATH);
+        content_TabPane.getTabs().get(currentContentTabIndex).setText(FIlE_STORES_PATH);
+
+        openTerminalHere_MenuItem.setDisable(true);
+    }
+
     private void initializeContextMenuForColumns()
     {
         contextMenuForColums = new ContextMenu();
@@ -1266,7 +1303,7 @@ public class FM_GUI extends Application
         createSymbolicLink_contextMenuForFilesItem = new MenuItem(createSymbolicLink_MenuItem.getText());
         createSymbolicLink_contextMenuForFilesItem.setOnAction(this::createSymbolicLink_MenuItem_Action);
 
-        copyFileToClipboard_contextMenuForFilesItem = new MenuItem(copy_MenuItem.getText());
+        copyFileToClipboard_contextMenuForFilesItem = new MenuItem(copyFile_MenuItem.getText());
         copyFileToClipboard_contextMenuForFilesItem.setOnAction(this::copyFilesToClipboard_MenuItem_Action);
 
         moveFilesToClipboard_contextMenuForFilesItem = new MenuItem(move_MenuItem.getText());
@@ -3446,7 +3483,6 @@ public class FM_GUI extends Application
         }
 
         Path pathToProperties = pathToProgram.resolve("general.properties");
-        System.out.println("Property file: " + pathToProperties.toAbsolutePath().toString());
 
         try
         {
@@ -3542,6 +3578,7 @@ public class FM_GUI extends Application
     {
         System.out.println("Stage спрятана.");
         saveGeneralPropertiesBeforeClose();
+        System.exit(0);
     }
 
     /**
@@ -3572,6 +3609,11 @@ public class FM_GUI extends Application
                     {
                         currentLanguage.loadFromXML(this.getClass().getResourceAsStream(languagePath));
                     }
+                    catch (NullPointerException nullPointerException)
+                    {
+                        System.out.println("Файл с локализацией не найден: " + languagePath);
+                        currentLanguage = new Properties();
+                    }
                     catch (IOException ioException)
                     {
                         ioException.printStackTrace();
@@ -3597,7 +3639,6 @@ public class FM_GUI extends Application
         {
             ioException.printStackTrace();
         }
-
     }
 
 
@@ -3619,7 +3660,8 @@ public class FM_GUI extends Application
         rename_MenuItem.setText(currentLanguage.getProperty("rename_menuItem", "Rename"));
         delete_MenuItem.setText(currentLanguage.getProperty("delete_menuItem", "Delete"));
         createSymbolicLink_MenuItem.setText(currentLanguage.getProperty("createSymbolicLink_menuItem", "Create Symbolic link"));
-        copy_MenuItem.setText(currentLanguage.getProperty("copy_menuItem", "Copy"));
+        copyFile_MenuItem.setText(currentLanguage.getProperty("copyFile_menuItem", "File"));
+        copy_Menu.setText(currentLanguage.getProperty("copy_menu", "Copy..."));
         paste_MenuItem.setText(currentLanguage.getProperty("paste_menuItem", "Paste"));
         move_MenuItem.setText(currentLanguage.getProperty("move_menuItem", "Move"));
         showOrEditAttributes_MenuItem.setText(currentLanguage.getProperty("attributes_menuItem", "Attributes"));
@@ -3630,6 +3672,7 @@ public class FM_GUI extends Application
         goToNextTab_MenuItem.setText(currentLanguage.getProperty("goToNextTab_menuItem", "Next tab"));
         goToHomeDirectory_MenuItem.setText(currentLanguage.getProperty("goToHomeDirectory_menuItem", "Home directory"));
         goToParent_MenuItem.setText(currentLanguage.getProperty("goToParent_menuItem", "Parent directory"));
+        goToUserDirectory_MenuItem.setText(currentLanguage.getProperty("goToUserDirectory_menuItem", "User directory"));
 
         sortBy_Menu.setText(currentLanguage.getProperty("sortBy_menu", "Sort by..."));
         sortByName_MenuItem.setText(currentLanguage.getProperty("sortByName_menuItem", "Name"));
@@ -3655,7 +3698,7 @@ public class FM_GUI extends Application
         createFile_contextMenuForFilesItem.setText(createFile_MenuItem.getText());
         createDirectory_contextMenuForFilesItem.setText(createDirectory_MenuItem.getText());
         createSymbolicLink_contextMenuForFilesItem.setText(createSymbolicLink_MenuItem.getText());
-        copyFileToClipboard_contextMenuForFilesItem.setText(copy_MenuItem.getText());
+        copyFileToClipboard_contextMenuForFilesItem.setText(copyFile_MenuItem.getText());
         renameFile_contextMenuForFilesItem.setText(rename_MenuItem.getText());
         deleteFile_contextMenuForFilesItem.setText(delete_MenuItem.getText());
         pasteFileFromClipboard_contextMenuForFilesItem.setText(paste_MenuItem.getText());
@@ -3823,7 +3866,6 @@ public class FM_GUI extends Application
                     .getSelectedItems().size());
         }
 
-        System.out.println("измене");
         createAndStartSelectedFilesSizeThreadForInfoToolBar();
     }
 
