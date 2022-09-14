@@ -1,6 +1,8 @@
 package org.yaldysse.fm.dialogs.delete;
 
 import javafx.application.Platform;
+import org.yaldysse.patterns.observer.Observer;
+import org.yaldysse.patterns.observer.Subject;
 
 import java.io.File;
 import java.io.IOException;
@@ -10,26 +12,32 @@ import java.util.ArrayList;
 /**
  * Класс, описывающие роботу потока по удалению заданных файлов. Перед завершением
  * работы потока вызывается метод {@link org.yaldysse.fm.dialogs.delete.DeleteProgress#appearDeleteProgress(int, Path, boolean, boolean, ArrayList)},
- * для указанного обьекта класса, что реализовывает интерфейс {@link org.yaldysse.fm.dialogs.delete.DeleteProgress}.
+ * для указанного объекта класса, что реализовывает интерфейс {@link org.yaldysse.fm.dialogs.delete.DeleteProgress}.
  * Таким образом поток передает данные об состоянии операции классу, что реализовывает
  * этот интерфейс.
+ * 14.09.2022 Адаптирован для использования паттерна Стратегия.
  */
-public class DeleteFiles implements Runnable
+public class DeleteFiles implements Runnable, Subject
 {
     private Path[] paths;
     private int deletedFiles;
     private Path currentFilePath;
-    private DeleteProgress deleteProgress;
     private boolean interrupt;
-    private ArrayList<Path> accessDeniedErrorsPath_ArrayList;
+    private ArrayList<Path> accessDeniedErrorPaths_ArrayList;
+    private ArrayList<Observer> observers;
+    private boolean interrupted;
+    private boolean completed;
 
-    public DeleteFiles(Path[] targetPaths, DeleteProgress aDeleteProgress)
+    public DeleteFiles(Path[] targetPaths, Observer newObserver)
     {
+        observers = new ArrayList<>();
+        registerObserver(newObserver);
         paths = targetPaths;
         deletedFiles = 0;
-        deleteProgress = aDeleteProgress;
         interrupt = false;
-        accessDeniedErrorsPath_ArrayList = new ArrayList<>();
+        interrupted = false;
+        completed = false;
+        accessDeniedErrorPaths_ArrayList = new ArrayList<>();
     }
 
     @Override
@@ -44,11 +52,16 @@ public class DeleteFiles implements Runnable
         }
         catch (InterruptedException interruptedException)
         {
-            notifyAboutCurrentProgress(true, true);
+            interrupted = true;
+            completed = true;
+            //notifyAboutCurrentProgress(completed, interrupted);
+            notifyObservers();
             System.out.println(interruptedException);
             return;
         }
-        notifyAboutCurrentProgress(true, false);
+        completed = true;
+        //notifyAboutCurrentProgress(completed, interrupted);
+        notifyObservers();
     }
 
     public void walkPathsThroughListMethod(final File targetFile) throws InterruptedException
@@ -74,11 +87,6 @@ public class DeleteFiles implements Runnable
                         File temporaryFile = new File(targetFile + File.separator + dirList[k]);
                         currentFilePath = temporaryFile.toPath();
 
-//                if (Files.isSymbolicLink(temporaryFile.toPath()))
-//                {
-//                    //System.out.println("Пропускаем : "+ temporaryFile);
-//                    continue;
-//                }
                         if (Files.isDirectory(currentFilePath, LinkOption.NOFOLLOW_LINKS))
                         {
                             walkPathsThroughListMethod(temporaryFile);
@@ -86,12 +94,13 @@ public class DeleteFiles implements Runnable
                         if (Files.deleteIfExists(currentFilePath))
                         {
                             deletedFiles++;
-                            notifyAboutCurrentProgress(false, false);
+                            //notifyAboutCurrentProgress(completed, interrupted);
+                            notifyObservers();
                         }
                     }
                     catch (AccessDeniedException accessDeniedException)
                     {
-                        accessDeniedErrorsPath_ArrayList.add(currentFilePath);
+                        accessDeniedErrorPaths_ArrayList.add(currentFilePath);
                     }
                     catch (NoSuchFileException noSuchFileException)
                     {
@@ -115,7 +124,7 @@ public class DeleteFiles implements Runnable
         }
         catch (AccessDeniedException accessDeniedException)
         {
-            accessDeniedErrorsPath_ArrayList.add(currentFilePath);
+            accessDeniedErrorPaths_ArrayList.add(currentFilePath);
         }
         catch (IOException ioException)
         {
@@ -123,15 +132,15 @@ public class DeleteFiles implements Runnable
         }
     }
 
-    private void notifyAboutCurrentProgress(final boolean completed,
-                                            final boolean interrupted)
-    {
-        Platform.runLater(() ->
-        {
-            deleteProgress.appearDeleteProgress(deletedFiles,
-                    currentFilePath, completed, interrupted, accessDeniedErrorsPath_ArrayList);
-        });
-    }
+//    private void notifyAboutCurrentProgress(final boolean completed,
+//                                            final boolean interrupted)
+//    {
+//        Platform.runLater(() ->
+//        {
+//            deleteProgress.appearDeleteProgress(deletedFiles,
+//                    currentFilePath, completed, interrupted, accessDeniedErrorPaths_ArrayList);
+//        });
+//    }
 
     public int getDeletedFilesNumber()
     {
@@ -177,5 +186,58 @@ public class DeleteFiles implements Runnable
         }
         Files.delete(targetPath);
 
+    }
+
+    public boolean isInterrupted()
+    {
+        return interrupted;
+    }
+
+    public boolean isCompleted()
+    {
+        return completed;
+    }
+
+    /**
+     * Возвращает путь к файлу, который находится в обработке на данный момент.
+     */
+    public Path getCurrentFilePath()
+    {
+        return currentFilePath;
+    }
+
+    /**
+     * Возвращает пути к файлам, которые не были удалены из-за невозможности получения
+     * доступа к ним.
+     */
+    public ArrayList<Path> getAccessDeniedErrorPaths()
+    {
+        return accessDeniedErrorPaths_ArrayList;
+    }
+
+    @Override
+    public void registerObserver(Observer observer)
+    {
+        observers.add(observer);
+        System.out.println("Новый Наблюдатель для субъекта удаления зарегистрирован.");
+    }
+
+    @Override
+    public void removeObserver(Observer observer)
+    {
+        observers.remove(observer);
+        System.out.println("Удален Наблюдатель для субъекта удаления.");
+    }
+
+    @Override
+    public void notifyObservers()
+    {
+        for (Observer observer : observers)
+        {
+            Platform.runLater(() ->
+            {
+                observer.updateData(this);
+            });
+        }
     }
 }

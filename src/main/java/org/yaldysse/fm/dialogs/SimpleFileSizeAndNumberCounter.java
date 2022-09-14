@@ -14,6 +14,10 @@ import java.nio.file.Path;
  * работы вызывается метод {@link org.yaldysse.fm.dialogs.FilesNumberAndSizeCalculator#appearInNodes(int, long)}.
  * Этот метод должны переопределить все классы, которые нуждаются в получение количества
  * файлов и их размер.
+ * 09.09.2022 закомментирован код подсчета размера каталогов, т.к. было обнаружено,
+ * что его работа зависит от ОС: В Linux размер каталога всегда равен 4096, а
+ * в Windows может отличаться. Поэтому данный класс теперь подсчитывает размер
+ * вложенных файлов, а не каталогов. Количество же обоих считается верно.
  */
 public class SimpleFileSizeAndNumberCounter implements Runnable
 {
@@ -106,14 +110,14 @@ public class SimpleFileSizeAndNumberCounter implements Runnable
                 {
                     filesNumber++;
                     directoriesNumber++;
-                    totalSize += Files.size(targetFile.toPath());
+                    //totalSize += Files.size(targetFile.toPath());
                     return;
                 }
                 else
                 {
                     directoriesNumber++;
                     filesNumber++;
-                    totalSize += Files.size(targetFile.toPath());
+                    //totalSize += Files.size(targetFile.toPath());
                 }
             }
             catch (IOException ioException)

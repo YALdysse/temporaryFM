@@ -1,6 +1,5 @@
 package org.yaldysse.fm.dialogs.delete;
 
-import com.sun.source.tree.NewClassTree;
 import javafx.event.ActionEvent;
 import javafx.geometry.Insets;
 import javafx.geometry.Orientation;
@@ -17,6 +16,8 @@ import javafx.stage.Stage;
 import javafx.stage.StageStyle;
 import org.yaldysse.fm.FM_GUI;
 import org.yaldysse.fm.dialogs.*;
+import org.yaldysse.patterns.observer.Observer;
+import org.yaldysse.patterns.observer.Subject;
 import org.yaldysse.tools.StorageCapacity;
 
 import java.nio.file.Path;
@@ -28,11 +29,11 @@ import java.util.Properties;
  * Описывает диалоговое окно с удалением файлов. После согласия на удаление
  * отображается окно с процессом удаления. Удаление происходит в отдельном потоке,
  * поведение которого описывает класс {@link org.yaldysse.fm.dialogs.delete.DeleteFiles}.
- * Взаимодействие потока удаления файлов и компонентов GUI происходит при помощи вызова
- * метода {@link org.yaldysse.fm.dialogs.delete.DeleteProgress#appearDeleteProgress(int, Path, boolean, boolean, ArrayList)} (int, Path, boolean, boolean)},
- * который определен без реализации в интерфейсе {@link org.yaldysse.fm.dialogs.delete.DeleteProgress}
+ * 14.09.2022 Был изменен под использование паттерна Наблюдатель, вследствии чего
+ * отпала надобность в реализации интерфейса DeleteProgress.
  */
-public class DeleteFileDialog implements FilesNumberAndSizeCalculator, DeleteProgress
+public class DeleteFileDialog implements FilesNumberAndSizeCalculator,
+        Observer
 {
     public static final double rem = new Text("").getBoundsInParent().getHeight();
 
@@ -444,7 +445,6 @@ public class DeleteFileDialog implements FilesNumberAndSizeCalculator, DeletePro
     /**
      * Этот метод вызывается из потока удаления файлов для отображения прогреса.
      */
-    @Override
     public void appearDeleteProgress(int aDeletedFilesNumber, Path currentPath,
                                      final boolean completed, final boolean canceled,
                                      final ArrayList<Path> accessDeniedErrorsPaths)
@@ -493,7 +493,7 @@ public class DeleteFileDialog implements FilesNumberAndSizeCalculator, DeletePro
         }
     }
 
-    @Override
+
     public void errorDetected(Path targetPath, String description)
     {
         //System.out.println(targetPath.toString());
@@ -527,6 +527,15 @@ public class DeleteFileDialog implements FilesNumberAndSizeCalculator, DeletePro
     private void okButton_Action(ActionEvent event)
     {
         stage.hide();
+    }
+
+    @Override
+    public void updateData(Subject subject)
+    {
+        DeleteFiles deleteFilesOperation = (DeleteFiles) subject;
+        appearDeleteProgress(deleteFilesOperation.getDeletedFilesNumber(), deleteFilesOperation.getCurrentFilePath(),
+                deleteFilesOperation.isCompleted(), deleteFilesOperation.isInterrupted(),
+                deleteFilesOperation.getAccessDeniedErrorPaths());
     }
 }
 

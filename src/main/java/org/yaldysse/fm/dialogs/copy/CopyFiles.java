@@ -2,6 +2,8 @@ package org.yaldysse.fm.dialogs.copy;
 
 import javafx.application.Platform;
 import org.yaldysse.fm.dialogs.ConfirmDialogButtonType;
+import org.yaldysse.patterns.observer.Observer;
+import org.yaldysse.patterns.observer.Subject;
 
 import java.io.*;
 import java.nio.ByteBuffer;
@@ -9,20 +11,31 @@ import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributeView;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.UserDefinedFileAttributeView;
+import java.util.ArrayList;
 import java.util.Timer;
 import java.util.TimerTask;
 
 /**
- * Поток выполнения, предназначен для копирования файлов. Взаимодействует
- * с диалоговым окном копирования посредством вызова методов, что предоставлены
- * интерфейсом {@link org.yaldysse.fm.dialogs.copy.CopyOperationProgress}.
+ * Поток выполнения, предназначен для копирования файлов.09.09.2022 Отправка данных
+ * в окно программы теперь не осуществляется после каждого обработанного файла,
+ * а строго по таймеру.
+ * Было внесено существенное изменение - теперь класс не реализует интерфейс
+ * CopyOperationProgress (был удалён). Это сделано потому, что отправка данных
+ * была реализована при помощи паттерна Наблюдатель. Теперь же класс реализует
+ * интерфейс субъекта, который владеет данными - {@link org.yaldysse.patterns.observer.Subject}.
  */
-public class CopyFiles implements Runnable
+public class CopyFiles implements Runnable, Subject
 {
     private final Path[] sourcePaths;
     private final Path[] destinationPaths;
+    /**
+     * Хранит количество файлов, что были обработаны.
+     */
     private int copiedFilesNumber;
     private long copiedBytes;
+    /**
+     * Хранит количество файлов, которое было успешно скопировано.
+     */
     private int finishedFilesNumber;
     /**
      * Хранит количество скопированных байт, для того,
@@ -30,39 +43,59 @@ public class CopyFiles implements Runnable
      */
     private long copiedBytesPortion;
     private long copiedBytesPortion_backup;
+
     private Path currentFilePath;
-    private final CopyOperationProgress copyOperationProgress;
+    //private final CopyOperationProgress copyOperationProgress;
+    /**
+     * Указывает, нужно ли отменить операцию.
+     */
     private boolean interrupt;
+    /**
+     * Указывает, была ли отменена операция или нет.
+     */
+    private boolean interrupted;
+    private boolean completed;
     private ConfirmDialogButtonType currentCopyOption;
     public final Object forLock = new Object();
     private Timer timer;
     private TimerTask timerTask;
     public final int timerDelay = 1;
     public final int timerPeriod = 1000;
-    private boolean removeFilesAfterCopy;
-    private boolean copyAttributes;
+    private final boolean removeFilesAfterCopy;
+    private final boolean copyAttributes;
+    private final ArrayList<Observer> observers;
+    private boolean fileAlreadyExistsState;
+    /**
+     * Хранит путь к исходному файлу для копирования, который уже существует
+     * в каталоге назначения.
+     */
+    private Path sourceFileAlreadyExists_Path;
+    private Path targetFileAlreadyExists_Path;
 
     public CopyFiles(final Path[] targetPaths, final Path[] aDestinationPaths,
-                     CopyOperationProgress aCopyProgress, final boolean removeFiles)
+                     final boolean removeFiles,
+                     Observer observer)
     {
+        observers = new ArrayList<>();
+        registerObserver(observer);
         sourcePaths = targetPaths;
         destinationPaths = aDestinationPaths;
         copiedFilesNumber = 0;
         copiedBytes = 0;
         finishedFilesNumber = 0;
-        copyOperationProgress = aCopyProgress;
         interrupt = false;
+        interrupted = false;
+        completed = false;
         copyAttributes = true;
         currentCopyOption = ConfirmDialogButtonType.ASK_ME;
         removeFilesAfterCopy = removeFiles;
-        //forLock = new Object();
         timerTask = new TimerTask()
         {
             @Override
             public void run()
             {
                 //System.out.println("Таймер сработал.");
-                notifyAboutCurrentProgress(false, false);
+                notifyAboutCurrentProgress();
             }
         };
         timer = new Timer();
@@ -81,13 +114,17 @@ public class CopyFiles implements Runnable
         }
         catch (InterruptedException interruptedException)
         {
-            notifyAboutCurrentProgress(true, true);
-            System.out.println(interruptedException);
             timer.cancel();
+            completed = true;
+            interrupted = true;
+            System.out.println(interruptedException);
+            notifyAboutCurrentProgress();
             return;
         }
-        notifyAboutCurrentProgress(true, false);
+
         timer.cancel();
+        completed = true;
+        notifyAboutCurrentProgress();
     }
 
 
@@ -105,7 +142,7 @@ public class CopyFiles implements Runnable
             currentCopyOption = ConfirmDialogButtonType.ASK_ME;
         }
 
-        notifyAboutCurrentProgress(false, false);
+        //notifyAboutCurrentProgress();
 
         try
         {
@@ -113,17 +150,19 @@ public class CopyFiles implements Runnable
             if (Files.exists(destinationFile.toPath(), LinkOption.NOFOLLOW_LINKS))
             {
                 System.out.println("Такой файл уже существует.");
+                fileAlreadyExistsState = true;
+                sourceFileAlreadyExists_Path = sourceFile.toPath();
+                targetFileAlreadyExists_Path = destinationFile.toPath();
 
                 if (currentCopyOption == ConfirmDialogButtonType.ASK_ME)
                 {
                     timer.cancel();
                     timer.purge();
-                    Platform.runLater(() -> copyOperationProgress.fileAlreadyExists(
-                            sourceFile.toPath(), destinationFile.toPath()));
+
+                    notifyObservers();
 
                     System.out.println("Текущий поток: " + Thread.currentThread().getName() +
                             ". Перехожу в режим ожидания.");
-
 
                     synchronized (forLock)
                     {
@@ -135,13 +174,16 @@ public class CopyFiles implements Runnable
                         @Override
                         public void run()
                         {
-                            notifyAboutCurrentProgress(false, false);
+                            notifyAboutCurrentProgress();
                         }
                     };
                     timer = new Timer();
                     timer.schedule(timerTask, timerDelay, timerPeriod);
                     System.out.println("Получено действие: " + currentCopyOption.name());
                     System.out.println("Выходим из режима ожидания");
+                    fileAlreadyExistsState = false;
+                    sourceFileAlreadyExists_Path = null;
+                    targetFileAlreadyExists_Path = null;
                 }
 
                 if (currentCopyOption == ConfirmDialogButtonType.SKIP)
@@ -251,10 +293,12 @@ public class CopyFiles implements Runnable
              BufferedOutputStream bufferedOutputStream =
                      new BufferedOutputStream(new FileOutputStream(destinationFile)))
         {
-            byte[] readBytes = null;
+            byte[] readBytes = new byte[8192];
+            int i;
 
-            while ((readBytes = bufferedInputStream.readNBytes(4096)
-            ) != null)
+//            while ((readBytes = bufferedInputStream.readNBytes(4096)
+//            ) != null)
+            while ((i = bufferedInputStream.read(readBytes)) != -1)
             {
                 if (interrupt)
                 {
@@ -263,19 +307,13 @@ public class CopyFiles implements Runnable
                     throw new InterruptedException("Операция отменена пользователем.");
                 }
 
-                bufferedOutputStream.write(readBytes);
-                copiedBytes += readBytes.length;
-                copiedBytesPortion += readBytes.length;
-
-                if (bufferedInputStream.available() < 1)
-                {
-                    System.out.println("Скорее всего писать нечего");
-                    copiedFilesNumber++;
-                    finishedFilesNumber++;
-                    break;
-                }
+                bufferedOutputStream.write(readBytes, 0, i);
+                copiedBytes += i;
+                copiedBytesPortion += i;
             }
-
+            System.out.println("Скорее всего писать нечего");
+            copiedFilesNumber++;
+            finishedFilesNumber++;
         }
         catch (FileNotFoundException fileNotFoundException)
         {
@@ -321,13 +359,10 @@ public class CopyFiles implements Runnable
         }
     }
 
-    private void notifyAboutCurrentProgress(final boolean completed,
-                                            final boolean interrupted)
+    private void notifyAboutCurrentProgress()
     {
         copiedBytesPortion_backup = copiedBytesPortion;
-        Platform.runLater(() ->
-                copyOperationProgress.appearOperationProgress(completed, interrupted, copiedFilesNumber,
-                        finishedFilesNumber, copiedBytes, copiedBytesPortion_backup, currentFilePath));
+        notifyObservers();
         copiedBytesPortion = 0;
     }
 
@@ -343,4 +378,102 @@ public class CopyFiles implements Runnable
         currentCopyOption = newCopyOption;
     }
 
+    @Override
+    public void registerObserver(Observer observer)
+    {
+        System.out.println("Добавлен новый наблюдатель: " + observer.toString());
+        observers.add(observer);
+    }
+
+    @Override
+    public void removeObserver(Observer observer)
+    {
+        observers.remove(observer);
+        System.out.println("Удаление наблюдателя: " + observer.toString());
+    }
+
+    @Override
+    public void notifyObservers()
+    {
+        for (Observer observer : observers)
+        {
+            Platform.runLater(() ->
+            {
+                observer.updateData(this);
+            });
+        }
+    }
+
+    /**
+     * Возвращает общее количество скопированный байт.
+     */
+    public long getCopiedBytesNumber()
+    {
+        return copiedBytes;
+    }
+
+    /**
+     * Возвращает количество файлов, которые были обработаны.
+     */
+    public int getProcessedFilesNumber()
+    {
+        return copiedFilesNumber;
+    }
+
+    /**
+     * Возвращает путь к файлу, который обрабатывается в данный момент.
+     */
+    public Path getCurrentFilePath()
+    {
+        return currentFilePath;
+    }
+
+    /**
+     * Возвращает количество байтов, что были скопировано от предыдущей отправки
+     * результатов.
+     */
+    public long getCopiedBytesPortion()
+    {
+        return copiedBytesPortion_backup;
+    }
+
+    /**
+     * Позволяет узнать, завершена ли операция. Данный метод ничего не сообщает
+     * об успешности операции.
+     */
+    public boolean isCompleted()
+    {
+        return completed;
+    }
+
+    /**
+     * Позволяет узнать, была ли прервана операция.
+     */
+    public boolean isInterrupted()
+    {
+        return interrupted;
+    }
+
+    /**
+     * Возвращает количество файлов, который были действительно скопированы.
+     */
+    public int getSuccessfullyCopiedFilesNumber()
+    {
+        return finishedFilesNumber;
+    }
+
+    public Path getSourceFilePathAlreadyExists()
+    {
+        return sourceFileAlreadyExists_Path;
+    }
+
+    public Path getTargetFilePathAlreadyExists()
+    {
+        return targetFileAlreadyExists_Path;
+    }
+
+    public boolean isFileAlreadyExists()
+    {
+        return fileAlreadyExistsState;
+    }
 }
