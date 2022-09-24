@@ -26,6 +26,7 @@ import org.yaldysse.fm.dialogs.FilesNumberAndSizeCalculator;
 import org.yaldysse.fm.dialogs.SimpleFileSizeAndNumberCounter;
 import org.yaldysse.fm.dialogs.delete.DeleteFiles;
 import org.yaldysse.fm.dialogs.delete.DeleteOperationResult;
+import org.yaldysse.fm.javaFXgui;
 import org.yaldysse.patterns.observer.Observer;
 import org.yaldysse.patterns.observer.Subject;
 import org.yaldysse.tools.StorageCapacity;
@@ -177,6 +178,7 @@ public class CopyFilesDialog implements FilesNumberAndSizeCalculator,
         root.setBorder(new Border(new BorderStroke(Color.BLACK, BorderStrokeStyle.SOLID,
                 CornerRadii.EMPTY, BorderStroke.MEDIUM, new Insets(rem * 0.4D))));
         root.setPadding(new Insets(rem * 0.8D));
+        root.setMinWidth(javaFXgui.rem * 10.0D);
 
         Label title_Label = new Label(language.getProperty("copying_title",
                 "Copying"));
@@ -680,29 +682,15 @@ public class CopyFilesDialog implements FilesNumberAndSizeCalculator,
                 stopOperation_Button.setDisable(true);
                 ok_Button.setDisable(false);
                 fileNameValue_Label.setText(language.getProperty("copyingFilesHaveBeenStopped_str",
-                        "Copying files have been stopped."));
+                        "Files copying have been stopped."));
             }
             else
             {
                 stopOperation_Button.setDisable(true);
                 ok_Button.setDisable(false);
                 fileNameValue_Label.setText(language.getProperty("copyingFilesHaveBeenCompleted_str",
-                        "Copying files have been completed."));
+                        "Files copying have been completed."));
 
-                if (deleteFiles && copiedFilesNumber == filesNumber)
-                {
-                    for (Path temporaryPath : paths)
-                    {
-                        try
-                        {
-                            DeleteFiles.deleteFileRecursively(temporaryPath);
-                        }
-                        catch (IOException ioException)
-                        {
-                            ioException.printStackTrace();
-                        }
-                    }
-                }
             }
             //fm_gui.updateFilesListAfterCopying(destinationPaths);
         }

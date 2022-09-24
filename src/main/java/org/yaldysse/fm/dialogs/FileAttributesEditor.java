@@ -28,13 +28,11 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.nio.file.attribute.*;
+import java.sql.SQLOutput;
 import java.text.NumberFormat;
 import java.time.*;
 import java.time.format.DateTimeFormatter;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Properties;
+import java.util.*;
 
 public class FileAttributesEditor implements FilesNumberAndSizeCalculator
 {
@@ -141,6 +139,10 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
     private HBox editGroup_HBox;
     private HBox editExtendedAttributes_HBox;
 
+    private Set<String> supportedAttributeViews;
+    private BasicFileAttributes fileTimeAttributes;
+    private FileOwnerAttributeView fileOwnerAttributeView;
+
 
     private Properties language;
 
@@ -148,6 +150,13 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
     {
         targetFile_Path = file;
         language = newLanguageProperties;
+        supportedAttributeViews = targetFile_Path.getFileSystem().supportedFileAttributeViews();
+        for (String attributeView : supportedAttributeViews)
+        {
+            System.out.println("Supported AttributeView: " + attributeView);
+        }
+        fileTimeAttributes = determineFileTime_withoutExceptions();
+
         initializeComponents();
         createAndStartFileSizeAndNumberCounterThread();
     }
@@ -393,90 +402,249 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
 
     }
 
+    /**
+     * @deprecated Переосмыслить!
+     * Для NTFS Win8.1: owner, dos, acl, basic, user
+     */
     private void readAttributes()
     {
-        try
+        if (fileTimeAttributes != null)
         {
-            BasicFileAttributeView basicFileAttributeView = Files.getFileAttributeView(targetFile_Path, BasicFileAttributeView.class,
-                    LinkOption.NOFOLLOW_LINKS);
-            BasicFileAttributes basicFileAttributes = basicFileAttributeView.readAttributes();
-
-            PosixFileAttributeView posixFileAttributeView = Files.getFileAttributeView(targetFile_Path, PosixFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
-            PosixFileAttributes posixFileAttributes = posixFileAttributeView.readAttributes();
+            System.out.println("FileTime class: " + fileTimeAttributes.getClass().getSimpleName());
 
             DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd, HH:mm:ss");
 
-            ownerAttributeValue_Label.setText(posixFileAttributes.owner().getName());
-            groupAttributeValue_Label.setText(String.valueOf(posixFileAttributes.group().getName()));
-            sizeBytesAttributeValue_Label.setText(NumberFormat.getNumberInstance().format(posixFileAttributes.size()));
-            creationTimeAttributeValue_Label.setText(LocalDateTime.ofInstant(basicFileAttributes.creationTime().toInstant(),
+            creationTimeAttributeValue_Label.setText(LocalDateTime.ofInstant(fileTimeAttributes.creationTime().toInstant(),
                     ZoneId.systemDefault()).format(formatter));
-            lastModifiedTimeAttributeValue_Label.setText(LocalDateTime.ofInstant(basicFileAttributes.lastModifiedTime().toInstant(),
+            lastModifiedTimeAttributeValue_Label.setText(LocalDateTime.ofInstant(fileTimeAttributes.lastModifiedTime().toInstant(),
                     ZoneId.systemDefault()).format(formatter));
+        }
 
+        fileOwnerAttributeView = determineOwnerAttributeView();
+        UserPrincipal fileOwner = determineOwner_withoutExceptions();
+        if (fileOwner != null)
+        {
+            ownerAttributeValue_Label.setText(fileOwner.getName());
+        }
 
-            Image granted_Image = new Image(getClass().getResourceAsStream("/Images/granted.png"));
-            Image hrenZnayet_Image = new Image(getClass().getResourceAsStream("/Images/cancel.png"));
+        //Группа определяется только posix
 
-            //Заполняем все ImageView изображениями с запретом
-            for (int k = 0; k < readPermissionsIndicator_ImageView.length; k++)
+        if (supportedAttributeViews.contains("posix"))
+        {
+            try
             {
-                setImageToImageView(hrenZnayet_Image, readPermissionsIndicator_ImageView[k]);
-                setImageToImageView(hrenZnayet_Image, writePermissionsIndicator_ImageView[k]);
-                setImageToImageView(hrenZnayet_Image, executePermissionsIndicator_ImageView[k]);
+                readPosixPermissions();
             }
-
-            Iterator<PosixFilePermission> iterator = posixFileAttributes.permissions().iterator();
-            while (iterator.hasNext())
+            catch (IOException ioException)
             {
-                PosixFilePermission temporaryPermission = iterator.next();
+                ioException.printStackTrace();
+            }
+        }
+    }
 
-                if (temporaryPermission == PosixFilePermission.OWNER_READ)
-                {
-                    setImageToImageView(granted_Image, readPermissionsIndicator_ImageView[0]);
-                }
-                else if (temporaryPermission == PosixFilePermission.OWNER_WRITE)
-                {
-                    setImageToImageView(granted_Image, writePermissionsIndicator_ImageView[0]);
-                }
-                else if (temporaryPermission == PosixFilePermission.OWNER_EXECUTE)
-                {
-                    setImageToImageView(granted_Image, executePermissionsIndicator_ImageView[0]);
-                }
-                else if (temporaryPermission == PosixFilePermission.GROUP_READ)
-                {
-                    setImageToImageView(granted_Image, readPermissionsIndicator_ImageView[1]);
-                }
-                else if (temporaryPermission == PosixFilePermission.GROUP_WRITE)
-                {
-                    setImageToImageView(granted_Image, writePermissionsIndicator_ImageView[1]);
-                }
-                else if (temporaryPermission == PosixFilePermission.GROUP_EXECUTE)
-                {
-                    setImageToImageView(granted_Image, executePermissionsIndicator_ImageView[1]);
-                }
-                else if (temporaryPermission == PosixFilePermission.OTHERS_READ)
-                {
-                    setImageToImageView(granted_Image, readPermissionsIndicator_ImageView[2]);
-                }
-                else if (temporaryPermission == PosixFilePermission.OTHERS_WRITE)
-                {
-                    setImageToImageView(granted_Image, writePermissionsIndicator_ImageView[2]);
-                }
-                else if (temporaryPermission == PosixFilePermission.OTHERS_EXECUTE)
-                {
-                    setImageToImageView(granted_Image, executePermissionsIndicator_ImageView[2]);
-                }
+
+    private void readPosixPermissions() throws IOException
+    {
+        PosixFileAttributeView posixFileAttributeView = null;
+
+        posixFileAttributeView = Files.getFileAttributeView(targetFile_Path, PosixFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
+        PosixFileAttributes posixFileAttributes = posixFileAttributeView.readAttributes();
+
+        groupAttributeValue_Label.setText(String.valueOf(posixFileAttributes.group().getName()));
+        sizeBytesAttributeValue_Label.setText(NumberFormat.getNumberInstance().format(posixFileAttributes.size()));
+
+        Image granted_Image = new Image(getClass().getResourceAsStream("/Images/granted.png"));
+        Image hrenZnayet_Image = new Image(getClass().getResourceAsStream("/Images/cancel.png"));
+
+        //Заполняем все ImageView изображениями с запретом
+        for (int k = 0; k < readPermissionsIndicator_ImageView.length; k++)
+        {
+            setImageToImageView(hrenZnayet_Image, readPermissionsIndicator_ImageView[k]);
+            setImageToImageView(hrenZnayet_Image, writePermissionsIndicator_ImageView[k]);
+            setImageToImageView(hrenZnayet_Image, executePermissionsIndicator_ImageView[k]);
+        }
+
+        Iterator<PosixFilePermission> iterator = posixFileAttributes.permissions().iterator();
+        while (iterator.hasNext())
+        {
+            PosixFilePermission temporaryPermission = iterator.next();
+
+            if (temporaryPermission == PosixFilePermission.OWNER_READ)
+            {
+                setImageToImageView(granted_Image, readPermissionsIndicator_ImageView[0]);
+            }
+            else if (temporaryPermission == PosixFilePermission.OWNER_WRITE)
+            {
+                setImageToImageView(granted_Image, writePermissionsIndicator_ImageView[0]);
+            }
+            else if (temporaryPermission == PosixFilePermission.OWNER_EXECUTE)
+            {
+                setImageToImageView(granted_Image, executePermissionsIndicator_ImageView[0]);
+            }
+            else if (temporaryPermission == PosixFilePermission.GROUP_READ)
+            {
+                setImageToImageView(granted_Image, readPermissionsIndicator_ImageView[1]);
+            }
+            else if (temporaryPermission == PosixFilePermission.GROUP_WRITE)
+            {
+                setImageToImageView(granted_Image, writePermissionsIndicator_ImageView[1]);
+            }
+            else if (temporaryPermission == PosixFilePermission.GROUP_EXECUTE)
+            {
+                setImageToImageView(granted_Image, executePermissionsIndicator_ImageView[1]);
+            }
+            else if (temporaryPermission == PosixFilePermission.OTHERS_READ)
+            {
+                setImageToImageView(granted_Image, readPermissionsIndicator_ImageView[2]);
+            }
+            else if (temporaryPermission == PosixFilePermission.OTHERS_WRITE)
+            {
+                setImageToImageView(granted_Image, writePermissionsIndicator_ImageView[2]);
+            }
+            else if (temporaryPermission == PosixFilePermission.OTHERS_EXECUTE)
+            {
+                setImageToImageView(granted_Image, executePermissionsIndicator_ImageView[2]);
+            }
+        }
+    }
+
+
+    /**
+     * Возвращает объект, что содержит данные об аттрибутах времени. Для
+     * определения используется PosixFileAttributeView, затем
+     * BasicFileAttributeView и напоследок -
+     * DosFileAttributeView. Исключительных ситуаций не выбрасывает.
+     */
+    private BasicFileAttributes determineFileTime_withoutExceptions()
+    {
+        try
+        {
+            if (supportedAttributeViews.contains("posix"))
+            {
+                PosixFileAttributeView posixFileAttributeView = Files.getFileAttributeView(targetFile_Path,
+                        PosixFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
+                System.out.println("FileTimeView: posix");
+                return posixFileAttributeView.readAttributes();
+            }
+            else if (supportedAttributeViews.contains("basic"))
+            {
+                BasicFileAttributeView basicFileAttributeView = Files.getFileAttributeView(targetFile_Path,
+                        BasicFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
+                System.out.println("FileTimeView: basic");
+                return basicFileAttributeView.readAttributes();
+            }
+            else if (supportedAttributeViews.contains("dos"))
+            {
+                DosFileAttributeView dosFileAttributeView = Files.getFileAttributeView(targetFile_Path,
+                        DosFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
+                System.out.println("FileTimeView: dos");
+                return dosFileAttributeView.readAttributes();
             }
         }
         catch (IOException ioException)
         {
             ioException.printStackTrace();
         }
+        return null;
     }
+
+    private BasicFileAttributeView determineFileTimeAttributeView_withoutExceptions()
+    {
+        if (supportedAttributeViews.contains("posix"))
+        {
+            PosixFileAttributeView posixFileAttributeView = Files.getFileAttributeView(targetFile_Path,
+                    PosixFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
+            System.out.println("FileTimeView: posix");
+            return posixFileAttributeView;
+        }
+        else if (supportedAttributeViews.contains("basic"))
+        {
+            BasicFileAttributeView basicFileAttributeView = Files.getFileAttributeView(targetFile_Path,
+                    BasicFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
+            System.out.println("FileTimeView: basic");
+            return basicFileAttributeView;
+        }
+        else if (supportedAttributeViews.contains("dos"))
+        {
+            DosFileAttributeView dosFileAttributeView = Files.getFileAttributeView(targetFile_Path,
+                    DosFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
+            System.out.println("FileTimeView: dos");
+            return dosFileAttributeView;
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Определяет владельца файла при помощи PosixFileAttributesView,
+     * AclFileAttributesView или FileOwnerAttributesView.
+     */
+    private UserPrincipal determineOwner_withoutExceptions()
+    {
+        try
+        {
+            if (supportedAttributeViews.contains("posix"))
+            {
+                System.out.println("Owner Attribute View: posix");
+                return Files.getFileAttributeView(targetFile_Path, PosixFileAttributeView.class,
+                        LinkOption.NOFOLLOW_LINKS).getOwner();
+            }
+            else if (supportedAttributeViews.contains("acl"))
+            {
+                System.out.println("Owner Attribute View: acl");
+                return Files.getFileAttributeView(targetFile_Path, AclFileAttributeView.class,
+                        LinkOption.NOFOLLOW_LINKS).getOwner();
+            }
+            else if (supportedAttributeViews.contains("owner"))
+            {
+                System.out.println("Owner Attribute View: owner");
+                return Files.getFileAttributeView(targetFile_Path, FileOwnerAttributeView.class,
+                        LinkOption.NOFOLLOW_LINKS).getOwner();
+            }
+        }
+        catch (IOException ioException)
+        {
+            ioException.printStackTrace();
+        }
+        return null;
+    }
+
+
+    /***/
+    private FileOwnerAttributeView determineOwnerAttributeView()
+    {
+        if (supportedAttributeViews.contains("posix"))
+        {
+            System.out.println("Owner Attribute View: posix");
+            return Files.getFileAttributeView(targetFile_Path, PosixFileAttributeView.class,
+                    LinkOption.NOFOLLOW_LINKS);
+        }
+        else if (supportedAttributeViews.contains("acl"))
+        {
+            System.out.println("Owner Attribute View: acl");
+            return Files.getFileAttributeView(targetFile_Path, AclFileAttributeView.class,
+                    LinkOption.NOFOLLOW_LINKS);
+        }
+        else if (supportedAttributeViews.contains("owner"))
+        {
+            System.out.println("Owner Attribute View: owner");
+            return Files.getFileAttributeView(targetFile_Path, FileOwnerAttributeView.class,
+                    LinkOption.NOFOLLOW_LINKS);
+        }
+
+        return null;
+    }
+
 
     private void readExtendedAttributesAndCreateGuiNodes()
     {
+        if (!supportedAttributeViews.contains("user"))
+        {
+            System.out.println("Расширенные аттрибуты не поддерживаются этой файловой системой.");
+            return;
+        }
+
         UserDefinedFileAttributeView view = Files.getFileAttributeView(targetFile_Path,
                 UserDefinedFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
 
@@ -574,6 +742,13 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
         editCreationTime_HBox.setAlignment(Pos.CENTER_LEFT);
         HBox.setHgrow(firstSeparator, Priority.ALWAYS);
 
+        if (fileTimeAttributes == null)
+        {
+            editCreationTime_HBox.setVisible(false);
+            System.out.println("Редактирование времени создания невозможно, т.к. никакие" +
+                    "из AttributeView не поддерживаются.");
+        }
+
 
         editLastModifiedTime_CheckBox = new CheckBox(language.getProperty("editLastModifiedTime_checkBox",
                 "Last modified time"));
@@ -613,6 +788,13 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
         editLastModifiedTime_HBox.setAlignment(Pos.CENTER_LEFT);
         HBox.setHgrow(secondSeparator, Priority.ALWAYS);
 
+        if (fileTimeAttributes == null)
+        {
+            editLastModifiedTime_HBox.setVisible(false);
+            System.out.println("Редактирование времени последнего изменения невозможно, т.к. никакие" +
+                    "из AttributeView не поддерживаются.");
+        }
+
         editPermissions_CheckBox = new CheckBox(language.getProperty("editPermissions_checkBox",
                 "Permissions"));
         editPermissions_CheckBox.setTextFill(Color.HONEYDEW);
@@ -651,6 +833,21 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
         editPermissions_HBox.setAlignment(Pos.CENTER_LEFT);
         HBox.setHgrow(thirdSeparator, Priority.ALWAYS);
 
+        Image warning_Image = new Image(getClass().getResourceAsStream("/Images/caution.png"));
+        ImageView warning_ImageView = new ImageView(warning_Image);
+        warning_ImageView.setPreserveRatio(true);
+        warning_ImageView.setFitHeight(30.0D);
+        warning_ImageView.setSmooth(true);
+        warning_ImageView.setOnMouseEntered(event ->
+        {
+            warning_MouseEntered();
+        });
+        warning_ImageView.setOnMouseExited(event ->
+        {
+            warning_MouseExited();
+        });
+
+        //----------------------------- Владелец
         editOwner_CheckBox = new CheckBox(language.getProperty("editOwner_checkBox",
                 "Owner"));
         editOwner_CheckBox.setTextFill(Color.HONEYDEW);
@@ -684,6 +881,19 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
         Separator fourthSeparator = new Separator(Orientation.HORIZONTAL);
         fourthSeparator.setMinHeight(FM_GUI.rem * 0.2D);
 
+        editOwner_HBox = new HBox(FM_GUI.rem * 0.7D, editOwner_CheckBox,
+                warning_ImageView, fourthSeparator);
+        editOwner_HBox.setAlignment(Pos.CENTER_LEFT);
+        HBox.setHgrow(fourthSeparator, Priority.ALWAYS);
+
+        if (fileOwnerAttributeView == null)
+        {
+            editOwner_HBox.setVisible(false);
+            System.out.println("Невозможно изменить владельца файла, т.к. ни" +
+                    "один AttributeView для этого не поддерживается.");
+        }
+
+        //----------------------------- Группа
         editGroup_CheckBox = new CheckBox(language.getProperty("editGroup_checkBox",
                 "Group"));
         editGroup_CheckBox.setTextFill(Color.HONEYDEW);
@@ -719,6 +929,14 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
         editGroup_HBox.setAlignment(Pos.CENTER_LEFT);
         HBox.setHgrow(fifthSeparator, Priority.ALWAYS);
 
+        if (!supportedAttributeViews.contains("posix"))
+        {
+            editGroup_HBox.setVisible(false);
+            System.out.println("Редактирования группы было скрыто, т.к. аттрибуты" +
+                    "posix не поддерживаются.");
+        }
+
+        //------------------------------ Пользовательские аттрибуты
         editExtendedAttributes_CheckBox = new CheckBox(language.getProperty("editExtendedAttributes_checkBox",
                 "Extended Attributes"));
         editExtendedAttributes_CheckBox.setTextFill(Color.HONEYDEW);
@@ -756,24 +974,12 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
         editExtendedAttributes_HBox.setAlignment(Pos.CENTER_LEFT);
         HBox.setHgrow(sixthSeparator, Priority.ALWAYS);
 
-        Image warning_Image = new Image(getClass().getResourceAsStream("/Images/caution.png"));
-        ImageView warning_ImageView = new ImageView(warning_Image);
-        warning_ImageView.setPreserveRatio(true);
-        warning_ImageView.setFitHeight(30.0D);
-        warning_ImageView.setSmooth(true);
-        warning_ImageView.setOnMouseEntered(event ->
+        if (!supportedAttributeViews.contains("user"))
         {
-            warning_MouseEntered();
-        });
-        warning_ImageView.setOnMouseExited(event ->
-        {
-            warning_MouseExited();
-        });
+            editExtendedAttributes_HBox.setVisible(false);
+            System.out.println("Редактирование расширенных аттрибутов не возможно.");
+        }
 
-        editOwner_HBox = new HBox(FM_GUI.rem * 0.7D, editOwner_CheckBox,
-                warning_ImageView, fourthSeparator);
-        editOwner_HBox.setAlignment(Pos.CENTER_LEFT);
-        HBox.setHgrow(fourthSeparator, Priority.ALWAYS);
 
         apply_Button = new Button(language.getProperty("apply_button",
                 "Apply"));
@@ -934,21 +1140,8 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
                 BorderStrokeStyle.SOLID, CornerRadii.EMPTY, BorderStroke.THIN, new Insets(0.0D,
                 FM_GUI.rem * 0.95D, FM_GUI.rem * 0.55D, FM_GUI.rem * 1.0D))));
 
-        PosixFileAttributeView posixFileAttributeView = null;
-        PosixFileAttributes posixFileAttributes = null;
 
-        try
-        {
-            posixFileAttributeView = Files.getFileAttributeView(targetFile_Path, PosixFileAttributeView.class,
-                    LinkOption.NOFOLLOW_LINKS);
-            posixFileAttributes = posixFileAttributeView.readAttributes();
-        }
-        catch (IOException ioException)
-        {
-            ioException.printStackTrace();
-        }
-
-        LocalDate creationDate = LocalDate.ofInstant(posixFileAttributes.creationTime().toInstant(), ZoneId.systemDefault());
+        LocalDate creationDate = LocalDate.ofInstant(fileTimeAttributes.creationTime().toInstant(), ZoneId.systemDefault());
 
         creationTime_Picker = new DatePicker(creationDate);
         creationTime_Picker.setShowWeekNumbers(true);
@@ -967,7 +1160,7 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
 
         creationTime_TextField = new TextField();
         creationTime_TextField.setPromptText("HH:MM:SS");
-        creationTime_TextField.setText(LocalDateTime.ofInstant(posixFileAttributes.creationTime().toInstant(), ZoneId.systemDefault())
+        creationTime_TextField.setText(LocalDateTime.ofInstant(fileTimeAttributes.creationTime().toInstant(), ZoneId.systemDefault())
                 .format(DateTimeFormatter.ofPattern("HH:mm:ss")));
         creationTime_TextField.setPrefColumnCount(6);
         creationTime_TextField.setOnKeyTyped((event) ->
@@ -1018,21 +1211,8 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
                 BorderStrokeStyle.SOLID, CornerRadii.EMPTY, BorderStroke.THIN, new Insets(0.0D,
                 FM_GUI.rem * 0.95D, FM_GUI.rem * 0.55D, FM_GUI.rem * 1.0D))));
 
-        PosixFileAttributeView posixFileAttributeView = null;
-        PosixFileAttributes posixFileAttributes = null;
 
-        try
-        {
-            posixFileAttributeView = Files.getFileAttributeView(targetFile_Path, PosixFileAttributeView.class,
-                    LinkOption.NOFOLLOW_LINKS);
-            posixFileAttributes = posixFileAttributeView.readAttributes();
-        }
-        catch (IOException ioException)
-        {
-            ioException.printStackTrace();
-        }
-
-        LocalDate lastModifiedDate = LocalDate.ofInstant(posixFileAttributes.lastModifiedTime().toInstant(), ZoneId.systemDefault());
+        LocalDate lastModifiedDate = LocalDate.ofInstant(fileTimeAttributes.lastModifiedTime().toInstant(), ZoneId.systemDefault());
 
         lastModifiedDate_Picker = new DatePicker(lastModifiedDate);
         lastModifiedDate_Picker.setShowWeekNumbers(true);
@@ -1050,7 +1230,7 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
 
         lastModifiedTime_TextField = new TextField();
         lastModifiedTime_TextField.setPromptText("HH:MM:SS");
-        lastModifiedTime_TextField.setText(LocalDateTime.ofInstant(posixFileAttributes.creationTime().toInstant(), ZoneId.systemDefault())
+        lastModifiedTime_TextField.setText(LocalDateTime.ofInstant(fileTimeAttributes.creationTime().toInstant(), ZoneId.systemDefault())
                 .format(DateTimeFormatter.ofPattern("HH:mm:ss")));
         lastModifiedTime_TextField.setPrefColumnCount(6);
         lastModifiedTime_TextField.setOnKeyTyped((event) ->
@@ -1101,19 +1281,6 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
                 BorderStrokeStyle.SOLID, CornerRadii.EMPTY, BorderStroke.THIN, new Insets(0.0D,
                 FM_GUI.rem * 0.95D, FM_GUI.rem * 0.55D, FM_GUI.rem * 1.0D))));
 
-        PosixFileAttributeView posixFileAttributeView = null;
-        PosixFileAttributes posixFileAttributes = null;
-
-        try
-        {
-            posixFileAttributeView = Files.getFileAttributeView(targetFile_Path, PosixFileAttributeView.class,
-                    LinkOption.NOFOLLOW_LINKS);
-            posixFileAttributes = posixFileAttributeView.readAttributes();
-        }
-        catch (IOException ioException)
-        {
-            ioException.printStackTrace();
-        }
 
         newUserPrincipal = new UserPrincipal[1];
         UserPrincipalLookupService userPrincipalLookupService = targetFile_Path.getFileSystem().getUserPrincipalLookupService();
@@ -1140,7 +1307,7 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
         TextField ownerName_TextField = new TextField();
         ownerName_TextField.setPromptText(language.getProperty("ownerName_promtText",
                 "Enter here name of new owner"));
-        ownerName_TextField.setText(posixFileAttributes.owner().toString());
+        ownerName_TextField.setText(determineOwner_withoutExceptions().getName());
         //ownerName_TextField.setPrefColumnCount(12);
         ownerName_TextField.setOnKeyTyped(event ->
         {
@@ -1373,7 +1540,7 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
         extendedAttributeValue_TextField.setText("");
         extendedAttributeValue_TextField.textProperty().addListener((event, value1, value2) ->
         {
-            if (value2.length() > 255)
+            if (value2.length() > 511)
             {
                 extendedAttributeValue_TextField.setText(value1);
             }
@@ -1606,10 +1773,10 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
                 .toInstant(ZoneId.systemDefault().getRules().getOffset(Instant.now()));
 
         FileTime newCreationTime_FileTime = FileTime.from(newCreationTime_Instant);
-        PosixFileAttributeView posixFileAttributeView = Files.getFileAttributeView(targetFile_Path, PosixFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
+        BasicFileAttributeView basic = determineFileTimeAttributeView_withoutExceptions();
         System.out.println(newCreationTime_FileTime.toString());
 
-        posixFileAttributeView.setTimes(newCreationTime_FileTime, newCreationTime_FileTime,
+        basic.setTimes(newCreationTime_FileTime, newCreationTime_FileTime,
                 newCreationTime_FileTime);
         System.out.println("Новое время создания должно быть записано.");
     }
@@ -1627,10 +1794,10 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
                 .toInstant(ZoneId.systemDefault().getRules().getOffset(Instant.now()));
 
         FileTime newCreationTime_FileTime = FileTime.from(newCreationTime_Instant);
-        PosixFileAttributeView posixFileAttributeView = Files.getFileAttributeView(targetFile_Path, PosixFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
         System.out.println(newCreationTime_FileTime.toString());
 
-        posixFileAttributeView.setTimes(null, null, newCreationTime_FileTime);
+        BasicFileAttributeView basic = determineFileTimeAttributeView_withoutExceptions();
+        basic.setTimes(null, null, newCreationTime_FileTime);
         System.out.println("Новое время создания должно быть записано.");
     }
 
@@ -1648,10 +1815,10 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
                 .toInstant(ZoneId.systemDefault().getRules().getOffset(Instant.now()));
 
         FileTime newLastModified_FileTime = FileTime.from(newLastModifiedTime_Instant);
-        PosixFileAttributeView posixFileAttributeView = Files.getFileAttributeView(targetFile_Path, PosixFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
+        BasicFileAttributeView basic = determineFileTimeAttributeView_withoutExceptions();
         System.out.println(newLastModified_FileTime.toString());
 
-        posixFileAttributeView.setTimes(newLastModified_FileTime, newLastModified_FileTime, newLastModified_FileTime);
+        basic.setTimes(newLastModified_FileTime, newLastModified_FileTime, newLastModified_FileTime);
         System.out.println("Новое время изменения должно быть записано.");
     }
 
@@ -1668,18 +1835,18 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
                 .toInstant(ZoneId.systemDefault().getRules().getOffset(Instant.now()));
 
         FileTime newLastModified_FileTime = FileTime.from(newLastModifiedTime_Instant);
-        PosixFileAttributeView posixFileAttributeView = Files.getFileAttributeView(targetFile_Path, PosixFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
+        BasicFileAttributeView basic = determineFileTimeAttributeView_withoutExceptions();
         System.out.println(newLastModified_FileTime.toString());
 
-        posixFileAttributeView.setTimes(newLastModified_FileTime, null, null);
+        basic.setTimes(newLastModified_FileTime, null, null);
         System.out.println("Новое время изменения должно быть записано.");
     }
 
     private void applyNewOwner() throws AccessDeniedException, IOException
     {
-        System.out.println("User: " + newUserPrincipal[0].getName());
-        PosixFileAttributeView posixFileAttributeView = Files.getFileAttributeView(targetFile_Path, PosixFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
-        posixFileAttributeView.setOwner(newUserPrincipal[0]);
+        System.out.println("User: " + newUserPrincipal[0].getName()
+                + "\nFile Owner Attribute View Class: " + fileOwnerAttributeView.getClass().getSimpleName());
+        fileOwnerAttributeView.setOwner(newUserPrincipal[0]);
     }
 
     private void applyNewGroup() throws AccessDeniedException, IOException
@@ -2034,7 +2201,6 @@ public class FileAttributesEditor implements FilesNumberAndSizeCalculator
 
             System.out.println("Добавление нового аттрибута с именем " + newAttributeName
                     + ", значением " + newAttributeValue);
-
             view.write(newAttributeName, Charset.defaultCharset().encode(newAttributeValue));
             deleteExtendedAttribute_Label.setVisible(true);
             attributesNames_ComboBox.setEditable(false);

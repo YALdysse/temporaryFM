@@ -132,7 +132,7 @@ public class BulkRename
         //VBox.setVgrow(nameModifiers_ScrollPane,Priority.ALWAYS);
 
         //------------------ Превью
-        preview_Label = new Label("Preview");
+        preview_Label = new Label(language.getProperty("preview_str", "Preview"));
         preview_Label.setFont(availableModifiers_Label.getFont());
 
         HBox previewLabel_HBox = new HBox(preview_Label);
@@ -191,8 +191,8 @@ public class BulkRename
 
     private void initializeResultScene()
     {
-        success_Label = new Label(language.getProperty("success_str",
-                "Rename has been successfully completed."));
+        success_Label = new Label(language.getProperty("bulkRenameSuccess_str",
+                "Bulk Rename has been successfully completed."));
         success_Label.setFont(Font.font(Font.getDefault().getName(), FontWeight.BOLD,
                 17.0D));
         success_Label.setTextFill(Color.WHITESMOKE);
@@ -229,7 +229,7 @@ public class BulkRename
         });
 
 
-        Button numberModifier_Button = new Button(language.getProperty("",
+        Button numberModifier_Button = new Button(language.getProperty("number_str",
                 "Number"));
         numberModifier_Button.setOnMouseClicked(event ->
         {
@@ -240,9 +240,13 @@ public class BulkRename
         });
 
         ComboBox<String> date_ComboBox = new ComboBox<>();
-        date_ComboBox.getItems().addAll("Date (ISO)", "Day (Number)",
-                "Day of year (Number)", "Month (Number)",
-                "Year (Number)");
+        date_ComboBox.getItems().addAll(
+                language.getProperty("date(ISO)_comboBoxItem", "Date (ISO)"),
+                language.getProperty("dayOfTheMonth(Number)_comboBoxItem", "Day (Number)"),
+                language.getProperty("dayOfTheYear(Number)_comboBoxItem", "Day of the year (Number)"),
+                language.getProperty("month(Number)_comboBoxItem", "Month (Number)"),
+                language.getProperty("year(Number)_comboBoxItem", "Year (Number)")
+        );
         date_ComboBox.setEditable(false);
         date_ComboBox.getSelectionModel().select(0);
         date_ComboBox.setOnMouseClicked(event ->
@@ -281,9 +285,13 @@ public class BulkRename
                 .getSelectedItem() + "_________", date_ComboBox.getEditor().getFont());
 
         ComboBox<String> time_ComboBox = new ComboBox<>();
-        time_ComboBox.getItems().addAll("Time (ISO)", "Hour (Number)",
-                "Minute (Number)", "Second (Number)",
-                "Nanosecond (Number)");
+        time_ComboBox.getItems().addAll(
+                language.getProperty("time(ISO)_comboBoxItem", "Time (ISO)"),
+                language.getProperty("hour(Number)_comboBoxItem", "Hour (Number)"),
+                language.getProperty("minute(Number)_comboBoxItem", "Minute (Number)"),
+                language.getProperty("second(Number)_comboBoxItem", "Second (Number)"),
+                language.getProperty("nanosecond(Number)_comboBoxItem", "Nanosecond (Number)")
+        );
         time_ComboBox.setEditable(false);
         time_ComboBox.getSelectionModel().select(0);
         time_ComboBox.setOnMouseClicked(event ->

@@ -8,10 +8,9 @@ import org.yaldysse.patterns.observer.Subject;
 import java.io.*;
 import java.nio.ByteBuffer;
 import java.nio.file.*;
-import java.nio.file.attribute.BasicFileAttributeView;
-import java.nio.file.attribute.BasicFileAttributes;
-import java.nio.file.attribute.UserDefinedFileAttributeView;
+import java.nio.file.attribute.*;
 import java.util.ArrayList;
+import java.util.Set;
 import java.util.Timer;
 import java.util.TimerTask;
 
@@ -259,9 +258,9 @@ public class CopyFiles implements Runnable, Subject
 
                 copiedFilesNumber++;
                 finishedFilesNumber++;
-                long temporaryBytes = Files.size(destinationFile.toPath());
-                copiedBytes += temporaryBytes;
-                copiedBytesPortion += temporaryBytes;
+                //long temporaryBytes = Files.size(destinationFile.toPath());
+                //copiedBytes += temporaryBytes;
+                //copiedBytesPortion += temporaryBytes;
             }
         }
         catch (IOException ioException)
@@ -278,6 +277,18 @@ public class CopyFiles implements Runnable, Subject
             File nextSourceFile = new File(sourceFile + File.separator + dirList[k]);
             File nextDestinationFile = new File(destinationFile + File.separator + dirList[k]);
             walkFilesAndCopy(nextSourceFile, nextDestinationFile);
+        }
+
+        try
+        {
+            if (removeFilesAfterCopy)
+            {
+                Files.delete(sourceFile.toPath());
+            }
+        }
+        catch (IOException ioException)
+        {
+            ioException.printStackTrace();
         }
     }
 
@@ -332,10 +343,8 @@ public class CopyFiles implements Runnable, Subject
      */
     private void copyAttributes(final Path sourceFile, final Path targetFile) throws IOException
     {
-        BasicFileAttributeView basicFileAttributeView_source = Files.getFileAttributeView(sourceFile, BasicFileAttributeView.class,
-                LinkOption.NOFOLLOW_LINKS);
-        BasicFileAttributeView basicFileAttributeView_target = Files.getFileAttributeView(targetFile, BasicFileAttributeView.class,
-                LinkOption.NOFOLLOW_LINKS);
+        BasicFileAttributeView basicFileAttributeView_source = determineFileTimeAttributeView_withoutExceptions(sourceFile);
+        BasicFileAttributeView basicFileAttributeView_target = determineFileTimeAttributeView_withoutExceptions(targetFile);
 
         BasicFileAttributes basicFileAttributes_source = basicFileAttributeView_source.readAttributes();
         basicFileAttributeView_target.setTimes(basicFileAttributes_source.lastModifiedTime(),
@@ -347,6 +356,12 @@ public class CopyFiles implements Runnable, Subject
         UserDefinedFileAttributeView extendedAttributes_target = Files.getFileAttributeView(targetFile,
                 UserDefinedFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
 
+        if (extendedAttributes_source == null || extendedAttributes_target == null)
+        {
+            System.out.println("Невозможно скопировать расширенные аттрибуты, т.к. одна из сторон их не поддерживает.");
+            return;
+        }
+
         ByteBuffer byteBuffer = null;
 
         for (String temporaryAttributeName : extendedAttributes_source.list())
@@ -357,6 +372,35 @@ public class CopyFiles implements Runnable, Subject
             extendedAttributes_target.write(temporaryAttributeName, byteBuffer);
             byteBuffer.clear();
         }
+    }
+
+    private BasicFileAttributeView determineFileTimeAttributeView_withoutExceptions(final Path path)
+    {
+        Set<String> supportedAttributeViews = path.getFileSystem().supportedFileAttributeViews();
+
+        if (supportedAttributeViews.contains("posix"))
+        {
+            PosixFileAttributeView posixFileAttributeView = Files.getFileAttributeView(path,
+                    PosixFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
+            System.out.println("FileTimeView: posix");
+            return posixFileAttributeView;
+        }
+        else if (supportedAttributeViews.contains("basic"))
+        {
+            BasicFileAttributeView basicFileAttributeView = Files.getFileAttributeView(path,
+                    BasicFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
+            System.out.println("FileTimeView: basic");
+            return basicFileAttributeView;
+        }
+        else if (supportedAttributeViews.contains("dos"))
+        {
+            DosFileAttributeView dosFileAttributeView = Files.getFileAttributeView(path,
+                    DosFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);
+            System.out.println("FileTimeView: dos");
+            return dosFileAttributeView;
+        }
+
+        return null;
     }
 
     private void notifyAboutCurrentProgress()

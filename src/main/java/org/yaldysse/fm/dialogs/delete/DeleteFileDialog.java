@@ -23,6 +23,7 @@ import org.yaldysse.tools.StorageCapacity;
 import java.nio.file.Path;
 import java.text.NumberFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Properties;
 
 /**
@@ -78,20 +79,8 @@ public class DeleteFileDialog implements FilesNumberAndSizeCalculator,
     private FM_GUI fm_gui;
 
 
-    public DeleteFileDialog(final Path targetPath, final Properties newLanguageProperties)
-    {
-        language = newLanguageProperties;
-        initializeComponents();
-        countFiles = 0;
-        totalSize = 0;
-        paths = new Path[1];
-        paths[0] = targetPath;
-        createAndStartThread();
-        initializeConfirmDialogComponents();
-    }
-
     /**
-     * В таком случае в обязательном порядке воспользоваться методом {@link #setTargetPath(Path)}
+     * В таком случае в обязательном порядке воспользоваться методом {@link #setTargetPaths(Path[])}
      */
     public DeleteFileDialog(FM_GUI aFmGui, final Properties newLanguageProperties)
     {
@@ -99,6 +88,7 @@ public class DeleteFileDialog implements FilesNumberAndSizeCalculator,
         initializeComponents();
         countFiles = 0;
         totalSize = 0;
+        deletedFiles = 0;
         fm_gui = aFmGui;
 
         initializeConfirmDialogComponents();
@@ -110,13 +100,12 @@ public class DeleteFileDialog implements FilesNumberAndSizeCalculator,
         initializeComponents();
         countFiles = 0;
         totalSize = 0;
+        deletedFiles = 0;
         paths = new Path[targetPaths.length];
         fm_gui = aFmGui;
 
-        for (int k = 0; k < paths.length; k++)
-        {
-            paths[k] = targetPaths[k];
-        }
+        paths = Arrays.copyOf(targetPaths, targetPaths.length);
+
         createAndStartThread();
         initializeConfirmDialogComponents();
     }
@@ -163,7 +152,14 @@ public class DeleteFileDialog implements FilesNumberAndSizeCalculator,
         totalSizeBytes_Label = new Label(language.getProperty("totalSizeBytes_label",
                 "Total size (bytes):"));
         totalSizeBytes_Label.setFont(Font.font(Font.getDefault().getName(), FontWeight.BOLD, 14.0D));
+
         totalSizeBytesValue_Label = new Label("?");
+        totalSizeBytesValue_Label.setFont(Font.font(Font.getDefault().getName(), FontWeight.MEDIUM, 11.0D));
+        totalSizeBytesValue_Label.setOpacity(0.8D);
+
+        VBox totalSizeValues_VBox = new VBox(0.1D, totalSizeValue_Label, new Separator(Orientation.HORIZONTAL),
+                totalSizeBytesValue_Label);
+        totalSizeValues_VBox.setFillWidth(true);
 
         progressFiles_Label = new Label(language.getProperty("progressFiles_label",
                 "Progress:"));
@@ -205,9 +201,9 @@ public class DeleteFileDialog implements FilesNumberAndSizeCalculator,
         operationInfo_GridPane.addRow(operationInfo_GridPane.getRowCount(), progressFiles_Label,
                 progressFilesValue_Label);
         operationInfo_GridPane.addRow(operationInfo_GridPane.getRowCount(), totalSize_Label,
-                totalSizeValue_Label);
-        operationInfo_GridPane.addRow(operationInfo_GridPane.getRowCount(), totalSizeBytes_Label,
-                totalSizeBytesValue_Label);
+                totalSizeValues_VBox);
+//        operationInfo_GridPane.addRow(operationInfo_GridPane.getRowCount(), totalSizeBytes_Label,
+//                totalSizeBytesValue_Label);
 //        operationInfo_GridPane.addRow(operationInfo_GridPane.getRowCount(), deletedFiles_Label,
 //                deletedFilesValue_Label);
         operationInfo_GridPane.addRow(operationInfo_GridPane.getRowCount(), progressIndicator);
@@ -320,25 +316,6 @@ public class DeleteFileDialog implements FilesNumberAndSizeCalculator,
         errors_VBox.getChildren().add(item_VBox);
     }
 
-    /**
-     * Позволяет задать файлы, над которыми нужно будет применить операцию. Автоматически
-     * запрашивает пересчет количества файлов и размер.
-     *
-     * @see
-     */
-    public void setTargetPath(final Path targetPath)
-    {
-        paths = null;
-        paths = new Path[1];
-        paths[0] = targetPath;
-        updateFilesList();
-        createAndStartThread();
-        errors_VBox.getChildren().clear();
-        if (!operationInfo_GridPane.getChildren().contains(progressIndicator))
-        {
-            operationInfo_GridPane.getChildren().add(progressIndicator);
-        }
-    }
 
     /**
      * Позволяет задать файлы, над которыми нужно будет применить операцию.
@@ -349,10 +326,11 @@ public class DeleteFileDialog implements FilesNumberAndSizeCalculator,
         paths = null;
         paths = new Path[targetPaths.length];
 
-        for (int k = 0; k < targetPaths.length; k++)
-        {
-            paths[k] = targetPaths[k];
-        }
+        paths = Arrays.copyOf(targetPaths, targetPaths.length);
+
+        countFiles = 0;
+        totalSize = 0;
+        deletedFiles = 0;
 
         updateFilesList();
         createAndStartThread();

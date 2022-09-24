@@ -10,6 +10,8 @@
 <entry key="goToFile_str">Перейти до файлу</entry>
 <entry key="enterChecksumHere_str">Введіть сюди контрольну суму</entry>
 <entry key="toConfigurePressLMB_str">Для налаштування натисніть ліву кнопку миші</entry>
+<entry key="number_str">Число</entry>
+<entry key="bulkRenameSuccess_str">Файли були успішно перейменовані.</entry>
 <!--File-->
 <entry key="file_menu">Головне</entry>
 <entry key="createNewTab_menuItem">Створити нову вкладку</entry>
@@ -56,6 +58,9 @@
 <entry key="name_column">Ім'я</entry>
 <entry key="type_column">Тип</entry>
 <entry key="size_column">Розмір</entry>
+<entry key="owner_column">Власник</entry>
+<entry key="creationTime_column">Дата створення</entry>
+<entry key="lastModifiedTime_column">Дата редагування</entry>
 <!--Files context menu-->
 <entry key="open_contextMenuForFilesItem">Відкрити</entry>
 <entry key="openInSystem_contextMenuForFilesItem">Система</entry>
@@ -141,4 +146,19 @@
 <entry key="accessDenied_str">Доступ обмежено</entry>
 <!--ChecksumChecker Dialog-->
 <entry key="checksum_label">Контрольна сума</entry>
+<!--Bulk Rename Dialog-->
+<entry key="availableModifiers_label">Доступні модифікатори</entry>
+<entry key="preview_str">Превью</entry>
+<entry key="rename_button">Перейменувати</entry>
+<entry key="nameModifiers_str">Поточні модифікатори</entry>
+<entry key="dayOfTheMonth(Number)_comboBoxItem">День місяця (Число)</entry>
+<entry key="dayOfTheYear(Number)_comboBoxItem">День року (Число)</entry>
+<entry key="month(Number)_comboBoxItem">Місяць (Число)</entry>
+<entry key="year(Number)_comboBoxItem">Рік (Число)</entry>
+<entry key="hour(Number)_comboBoxItem">Година (Число)</entry>
+<entry key="minute(Number)_comboBoxItem">Хвилина (Число)</entry>
+<entry key="second(Number)_comboBoxItem">Секунда (Число)</entry>
+<entry key="nanosecond(Number)_comboBoxItem">Наносекунда (Число)</entry>
+<entry key="time(ISO)_comboBoxItem">Час (ISO)</entry>
+<entry key="date(ISO)_comboBoxItem">Дата (ISO)</entry>
 </properties>

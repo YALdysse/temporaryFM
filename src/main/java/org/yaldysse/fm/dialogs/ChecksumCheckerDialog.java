@@ -6,11 +6,9 @@ import javafx.geometry.Insets;
 import javafx.geometry.Orientation;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
-import javafx.scene.control.Label;
-import javafx.scene.control.ProgressIndicator;
-import javafx.scene.control.Separator;
-import javafx.scene.control.TextField;
+import javafx.scene.control.*;
 import javafx.scene.image.Image;
+import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
@@ -54,6 +52,7 @@ public class ChecksumCheckerDialog
     private Thread calculatingChecksum_Thread;
     private ProgressIndicator md5_ProgressIndicator;
     private ProgressIndicator sha1_ProgressIndicator;
+    private BorderPane borderPane;
 
     public ChecksumCheckerDialog(final Path targetFile, final Properties languageProperties)
     {
@@ -108,7 +107,7 @@ public class ChecksumCheckerDialog
         md5FileChecksum_TextField.setEditable(false);
 
         md5_ProgressIndicator = new ProgressIndicator();
-        md5_ProgressIndicator.setPrefHeight(javaFXgui.rem * 0.6D);
+        md5_ProgressIndicator.setMaxHeight(javaFXgui.rem * 1.4D);
 
         md5Equals_Label = new Label();
         md5Equals_Label.setFont(Font.font(Font.getDefault().getName(),
@@ -131,7 +130,7 @@ public class ChecksumCheckerDialog
         sha1FileChecksum_TextField.setEditable(false);
 
         sha1_ProgressIndicator = new ProgressIndicator();
-        sha1_ProgressIndicator.setPrefHeight(md5_ProgressIndicator.getPrefHeight());
+        sha1_ProgressIndicator.setMaxHeight(md5_ProgressIndicator.getMaxHeight());
 
         sha1Equals_Label = new Label();
         sha1Equals_Label.setFont(md5Equals_Label.getFont());
@@ -145,12 +144,18 @@ public class ChecksumCheckerDialog
         HBox.setHgrow(sha1_HBox, Priority.ALWAYS);
         HBox.setHgrow(sha1FileChecksum_TextField, Priority.ALWAYS);
 
+        ProgressBar progressBar = new ProgressBar();
+        progressBar.setMaxHeight(javaFXgui.rem * 0.2D);
+
+        borderPane = new BorderPane();
+        borderPane.setBottom(progressBar);
+
 
         fileChecksums_VBox = new VBox(javaFXgui.rem * 1.2D, md5FileChecksum,
                 sha1FileChecksum);
 
         root.getChildren().addAll(fileName_HBox,
-                checksum_HBox, separator, fileChecksums_VBox);
+                checksum_HBox, separator, fileChecksums_VBox, borderPane);
 
         stage = new Stage();
         stage.setScene(scene);

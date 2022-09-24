@@ -44,11 +44,13 @@ import org.yaldysse.fm.dialogs.copy.CopyFilesDialog;
 import org.yaldysse.fm.dialogs.delete.DeleteFileDialog;
 import org.yaldysse.fm.dialogs.delete.DeleteOperationResult;
 import org.yaldysse.fm.dialogs.favorites.FavoritesDialog;
+import org.yaldysse.fm.nio_file_attribute.NioFileAttributes;
 import org.yaldysse.tools.ErrorCatcher;
 import org.yaldysse.tools.Shell;
 import org.yaldysse.tools.StorageCapacity;
 import org.yaldysse.tools.StorageSpaceFormatter;
 
+import javax.swing.*;
 import java.io.File;
 import java.io.IOException;
 import java.net.URISyntaxException;
@@ -352,6 +354,7 @@ public class FM_GUI extends Application
                 "Exit"));
         exit_MenuItem.setOnAction(event ->
         {
+            saveGeneralPropertiesBeforeClose();
             System.exit(0);
         });
         exit_MenuItem.setAccelerator(new KeyCodeCombination(KeyCode.Q, KeyCombination.CONTROL_DOWN));
@@ -673,7 +676,7 @@ public class FM_GUI extends Application
         CustomTreeTableColumn<FileData, String> sizeColumn = new CustomTreeTableColumn<>(
                 currentLanguage.getProperty("size_column", "Size"));
         sizeColumn.setMinWidth(preferredWidth * 0.05D);
-        sizeColumn.setPrefWidth(preferredWidth * 0.1D);
+        sizeColumn.setPrefWidth(preferredWidth * 0.2D);
         sizeColumn.setSortable(false);
         sizeColumn.setId(SIZE_COLUMN_ID);
 
@@ -1726,16 +1729,11 @@ public class FM_GUI extends Application
         }
         else if (keyRelease_KeyCode == KeyCode.F11)
         {
-//            try
-//            {
-////                String check = ChecksumCalculator.(new BufferedInputStream(
-////                        Files.newInputStream(tttt)), CheckSumAlgorithms.SHA256.SHA256);
-////                System.out.println("SHA256: " + check);
-//            }
-//            catch(IOException ioException)
-//            {
-//                ioException.printStackTrace();
-//            }
+            final javax.swing.JFileChooser fc = new javax.swing.JFileChooser();
+            Icon icon = fc.getUI().getFileView(fc).getIcon(currentPath.get(currentContentTabIndex).resolve(
+                    activatedTreeTableView.getSelectionModel().getSelectedItem().getValue().getName()
+            ).toFile());
+            JOptionPane.showMessageDialog(null, icon);
 
 
             for (File f : File.listRoots())
@@ -1941,6 +1939,7 @@ public class FM_GUI extends Application
 
         if (deleteFileDialog == null)
         {
+            //deleteFileDialog = new DeleteFileDialog(this, currentLanguage);
             deleteFileDialog = new DeleteFileDialog(this, currentLanguage);
         }
         deleteFileDialog.setTargetPaths(paths);
@@ -2715,37 +2714,35 @@ public class FM_GUI extends Application
         FileData newFileData = new FileData(targetPath.getFileName().toString(),
                 -1);
 
+        NioFileAttributes nioFileAttributes = null;
+        Path temporaryPath = targetPath;
+
         try
         {
-            PosixFileAttributes basicFileAttributes = Files.readAttributes(targetPath, PosixFileAttributes.class,
-                    LinkOption.NOFOLLOW_LINKS);
-            newFileData.setSize(basicFileAttributes.size());
-            newFileData.setFile(basicFileAttributes.isRegularFile());
-            newFileData.setSymbolicLink(basicFileAttributes.isSymbolicLink());
-            newFileData.setDirectory(basicFileAttributes.isDirectory());
-
-            //Определяем ссылка ли это на каталог или файл
-            if (newFileData.isSymbolicLink())
+            if (Files.isSymbolicLink(targetPath))
             {
-                Path symbolicLinkTargetPath = Files.readSymbolicLink(targetPath);
-                PosixFileAttributes temporaryAttributes = Files.readAttributes(symbolicLinkTargetPath,
-                        PosixFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
-                newFileData.setFile(temporaryAttributes.isRegularFile());
-                newFileData.setDirectory(temporaryAttributes.isDirectory());
-                newFileData.setSymbolicLinkPath(symbolicLinkTargetPath);
+                temporaryPath = Files.readSymbolicLink(targetPath);
             }
+
+            nioFileAttributes = NioFileAttributes.get(temporaryPath);
+
+            newFileData.setSize(nioFileAttributes.getSize());
+            newFileData.setFile(nioFileAttributes.isRegularFile());
+            newFileData.setSymbolicLink(nioFileAttributes.isSymbolicLink());
+            newFileData.setDirectory(nioFileAttributes.isDirectory());
+
 
             if (currentCreationTimeColumn.isVisible())
             {
-                newFileData.setCreationTime(basicFileAttributes.creationTime());
+                newFileData.setCreationTime(nioFileAttributes.getCreationTime());
             }
             if (currentLastModifiedTimeColumn.isVisible())
             {
-                newFileData.setLastModifiedTime(basicFileAttributes.lastModifiedTime());
+                newFileData.setLastModifiedTime(nioFileAttributes.getLastModifiedTime());
             }
             if (currentOwnerColumn.isVisible())
             {
-                newFileData.setOwner(Files.getOwner(targetPath, LinkOption.NOFOLLOW_LINKS).getName());
+                newFileData.setOwner(nioFileAttributes.getOwner().getName());
             }
 
             TreeItem<FileData> temporaryTreeItem = new TreeItem<>(newFileData);
@@ -2986,6 +2983,8 @@ public class FM_GUI extends Application
 
         VBox files_VBox = new VBox(rem * 0.45D);
         files_VBox.getChildren().add(newTreeTableView);
+        VBox.setVgrow(files_VBox, Priority.ALWAYS);
+        VBox.setVgrow(newTreeTableView, Priority.ALWAYS);
 
         ScrollPane newFiles_ScrollPane = new ScrollPane();
         newFiles_ScrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
